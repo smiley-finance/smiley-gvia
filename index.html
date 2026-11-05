@@ -67,6 +67,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:right;
       </div>
       <span class="sp"></span><span id="who" class="mute"></span><button class="btn" id="out">יציאה</button>
     </header>
+    <div id="banner" class="card hide" style="background:var(--warnbg);border-color:#fcd34d;margin-bottom:10px">מצב עובד: זה מה שהעובד רואה. שינויים שתעשה כאן נשמרים בתיקים, אבל לא נספרים לו לעמלה.</div>
     <div class="kpis" id="kpis"></div>
 
     <div id="vCases" class="grid">
@@ -87,10 +88,10 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:right;
 
 <script>
 const SB = supabase.createClient("https://tlxuqxlqzcpelcfdtjax.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRseHVxeGxxemNwZWxjZmR0amF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMDUzNDcsImV4cCI6MjA5NTg4MTM0N30.M_Pe6uLqhh_cj8SzPLTMJA9VtjFT0h1dWNmLc_WZxCs");
-const STATUSES = ["חדש","אין מענה","בטיפול","הבטיח לשלם","טוען ששילם","סירב","נשלח מכתב התראה","טענה – ליאיר","ביקש הסדר – ליאיר","לא לפנות"];
+const STATUSES = ["חדש","אין מענה","בטיפול","הבטיח לשלם","בוצע – ממתין לאימות","טוען ששילם","סירב","נשלח מכתב התראה","טענה – ליאיר","ביקש הסדר – ליאיר","לא לפנות"];
 const TO_YAIR = ["טענה – ליאיר","ביקש הסדר – ליאיר"];
 const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
-let ME = null, ADMIN = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "queue", SEL = null;
+let ME = null, ADMIN = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "queue", SEL = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ils = n => "₪" + Number(n || 0).toLocaleString("he-IL", {minimumFractionDigits: 0, maximumFractionDigits: 2});
@@ -102,6 +103,10 @@ const days = iso => iso ? Math.floor((Date.now() - new Date(iso)) / 864e5) : 999
 const local = p => p ? "0" + p.slice(3) : "";
 function toast(t){ const e = $("#toast"); e.textContent = t; e.style.display = "block"; setTimeout(() => e.style.display = "none", 2200); }
 const isPaid = c => Number(c.paid_amount || 0) * 100 >= c.amount - 1;
+const DONE = "בוצע – ממתין לאימות";
+const stuck = c => c.status === DONE && !isPaid(c) && days(c.done_at) >= 1;   // marked done, no payment found after a day
+const boss = () => ADMIN && !AGENT_VIEW;
+const ls = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch (e) { return null; } };
 
 // ---------- auth ----------
 async function start(){
@@ -110,9 +115,21 @@ async function start(){
   ME = data.session.user.email; $("#who").textContent = ME;
   const a = await SB.from("coll_admins").select("email").eq("email", ME); ADMIN = !!(a.data && a.data.length);
   $("#app").classList.remove("hide"); $("#login").classList.add("hide");
+  if (ADMIN){
+    AGENT_VIEW = ls("agentView") === "1";
+    $("#who").insertAdjacentHTML("beforebegin", `<button class="btn" id="av"></button>`);
+    $("#av").onclick = () => { AGENT_VIEW = !AGENT_VIEW; ls("agentView", AGENT_VIEW ? "1" : "0"); mode(); render(); };
+  }
+  mode();
   STATUSES.forEach(s => $("#fs").insertAdjacentHTML("beforeend", `<option>${s}</option>`));
-  $("#fs").insertAdjacentHTML("beforeend", `<option value="__paid">שולם ✔</option>`);
+  $("#fs").insertAdjacentHTML("beforeend", `<option value="__paid">שולם ✔ אומת</option>`);
   await load();
+}
+function mode(){
+  $("[data-v=yair]").classList.toggle("hide", !boss());
+  if (!boss() && VIEW === "yair"){ VIEW = "queue"; document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.v === "queue")); }
+  $("#banner").classList.toggle("hide", !(ADMIN && AGENT_VIEW));
+  if ($("#av")) $("#av").textContent = AGENT_VIEW ? "חזרה למצב מנהל" : "מצב עובד";
 }
 $("#go").onclick = async () => {
   const { error } = await SB.auth.signInWithPassword({ email: $("#em").value.trim(), password: $("#pw").value });
@@ -140,13 +157,14 @@ function due(c){
     case "בטיפול": return since >= 2;
     case "הבטיח לשלם": return !c.promise_date || new Date(c.promise_date) <= today();
     case "טוען ששילם": return since >= 1;
+    case DONE: return stuck(c);
     case "סירב": return true;                       // next step: send the letter
     case "נשלח מכתב התראה": return since >= 11;      // 3 days before the letter's 14-day deadline
   }
   return false;
 }
 function why(c){
-  return {"חדש":"פנייה ראשונה","אין מענה":"לנסות שוב","בטיפול":"מעקב","הבטיח לשלם":"הגיע מועד ההבטחה","טוען ששילם":"לא נמצא תשלום — לבקש אישור",
+  return {"חדש":"פנייה ראשונה","אין מענה":"לנסות שוב","בטיפול":"מעקב","הבטיח לשלם":"הגיע מועד ההבטחה","טוען ששילם":"לא נמצא תשלום — לבקש אישור",[DONE]:"סומן בוצע אבל לא נמצא תשלום — לבדוק עם הלקוח",
           "סירב":"לשלוח מכתב התראה","נשלח מכתב התראה":"תזכורת אחרונה לפני המועד שבמכתב"}[c.status] || "";
 }
 function kpis(){
@@ -160,7 +178,8 @@ function kpis(){
   ].map(([t, v]) => `<div class="kpi"><b>${v}</b><span>${t}</span></div>`).join("");
 }
 function chip(c){
-  if (isPaid(c)) return `<span class="chip ok">שולם ✔</span>`;
+  if (isPaid(c)) return `<span class="chip ok">שולם ✔ אומת</span>`;
+  if (c.status === DONE) return stuck(c) ? `<span class="chip bad">לא נמצא תשלום</span>` : `<span class="chip warn">בוצע – ממתין לאימות</span>`;
   if (Number(c.paid_amount) > 0) return `<span class="chip ok">שולם חלקית</span>`;
   const cls = TO_YAIR.includes(c.status) || c.status === "סירב" ? "bad" : c.status === "הבטיח לשלם" || c.status === "טוען ששילם" ? "warn" : "";
   return `<span class="chip ${cls}">${esc(c.status)}</span>`;
@@ -169,7 +188,7 @@ function render(){
   $("#vCases").classList.toggle("hide", VIEW === "pay"); $("#vPay").classList.toggle("hide", VIEW !== "pay");
   if (VIEW === "pay") return payroll();
   const q = $("#q").value.trim().toLowerCase(), fs = $("#fs").value;
-  let list = VIEW === "queue" ? CASES.filter(due) : VIEW === "yair" ? CASES.filter(c => TO_YAIR.includes(c.status) && !isPaid(c)) : CASES;
+  let list = VIEW === "queue" ? CASES.filter(due) : VIEW === "yair" ? CASES.filter(c => (TO_YAIR.includes(c.status) || stuck(c)) && !isPaid(c)) : CASES;
   if (fs) list = list.filter(c => fs === "__paid" ? isPaid(c) : c.status === fs && !isPaid(c));
   if (q) list = list.filter(c => [c.name, c.phone, local(c.phone), c.orders_label, c.email].join(" ").toLowerCase().includes(q));
   if (VIEW === "queue"){                                        // promises and follow-ups first, then new cases (newest disputes first)
@@ -230,7 +249,7 @@ async function openCase(phone){
 
     <h3>עדכון סטטוס</h3>
     <form class="st" id="stf">
-      <select id="st">${STATUSES.map(s => `<option ${s === c.status ? "selected" : ""}>${s}</option>`).join("")}</select>
+      <select id="st">${isPaid(c) ? `<option>${esc(c.status)}</option>` : ""}${STATUSES.map(s => `<option ${s === c.status ? "selected" : ""}>${s}</option>`).join("")}</select>
       <input type="date" id="pd" value="${c.promise_date || ""}" title="תאריך שהבטיח לשלם">
       <textarea id="nt" placeholder="מה היה בשיחה (קצר)"></textarea>
       <label class="mute" style="grid-column:1/-1"><input type="checkbox" id="lt"> להכין מכתב התראה עדכני (מוכן תוך כשעה)</label>
@@ -272,7 +291,7 @@ function payroll(){
     <table><tr><th>חודש</th><th>תשלומים</th><th>נגבה נטו</th><th>עמלה</th><th>מועד תשלום</th><th>סטטוס</th><th></th></tr>
     ${rows.map(r => `<tr><td>${r.m}</td><td>${r.n}</td><td>${ils(r.col)}</td><td><b>${ils(r.com)}</b></td><td>${dmy(r.pay)}</td>
       <td>${r.po ? `<span class="chip ok">שולם ${dmy(new Date(r.po.paid_at))}${r.po.ref ? " · " + esc(r.po.ref) : ""}</span>` : r.m === cur ? `<span class="chip">חודש פתוח</span>` : `<span class="chip warn">ממתין לתשלום</span>`}</td>
-      <td><button class="btn" data-csv="${r.m}">פירוט CSV</button>${ADMIN && !r.po && r.m !== cur ? ` <button class="btn g" data-pay="${r.m}">סמן כשולם</button>` : ""}</td></tr>`).join("")}
+      <td><button class="btn" data-csv="${r.m}">פירוט CSV</button>${boss() && !r.po && r.m !== cur ? ` <button class="btn g" data-pay="${r.m}">סמן כשולם</button>` : ""}</td></tr>`).join("")}
     </table>
     <h3>תשלומים אחרונים</h3>
     <table><tr><th>תאריך</th><th>לקוח</th><th>סכום</th><th>הוחזר</th><th>עמלה</th><th>חודש</th></tr>
