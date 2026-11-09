@@ -24,6 +24,8 @@ header h1{font-size:20px;margin:0}header .sp{flex:1}
 .list{max-height:calc(100vh - 250px);overflow:auto;padding:0}
 .row{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer}
 .row:hover{background:#f3f4f6}.row.sel{background:#eef2ff}.row .n{flex:1;min-width:0}.row .n small{display:block;color:var(--mute)}
+.ph{direction:ltr;unicode-bidi:isolate}
+.shot{display:block;max-width:220px;border:1px solid var(--line);border-radius:8px;margin:6px 0;cursor:zoom-in}
 .chip{font-size:12px;padding:2px 8px;border-radius:999px;background:#eef0f3;white-space:nowrap}
 .chip.ok{background:var(--okbg);color:var(--ok)}.chip.warn{background:var(--warnbg);color:var(--warn)}.chip.bad{background:var(--badbg);color:var(--bad)}
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.tools input,.tools select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
@@ -120,6 +122,7 @@ async function start(){
   mode();
   STATUSES.forEach(s => $("#fs").insertAdjacentHTML("beforeend", `<option>${s}</option>`));
   await load();
+  setInterval(() => document.visibilityState === "visible" && load(), 3 * 60e3);   // payments verified in the background drop off the list
 }
 function mode(){
   $("#banner").classList.toggle("hide", !(ADMIN && AGENT_VIEW));
@@ -137,6 +140,7 @@ async function load(){
     SB.from("coll_cases").select("*").eq("removed", false).order("latest", {ascending: false}),
     SB.from("coll_payments").select("*").order("paid_at", {ascending: false}),
     SB.from("coll_payouts").select("*")]);
+  if (c.error) return toast("לא הצלחתי לרענן את התיקים, מנסה שוב בעוד כמה דקות");
   CASES = (c.data || []).filter(x => !isPaid(x));            // paid and verified = gone from the desk
   PAYS = p.data || []; PAYOUTS = o.data || [];
   kpis(); render();
@@ -184,10 +188,11 @@ function render(){
   }
   $("#rows").innerHTML = list.length ? list.map(c => `
     <div class="row ${SEL === c.phone ? "sel" : ""}" data-p="${c.phone}">
-      <div class="n"><b>${esc(c.name)}</b><small>${esc(c.total)} · ${esc(c.case_type)}${next(c) ? " · " + next(c) : ""}</small></div>${chip(c)}
+      <div class="n"><b>${esc(c.name)}</b><small class="ph">${esc(local(c.phone))}</small><small>${esc(c.total)} · ${esc(c.case_type)}${next(c) ? " · " + next(c) : ""}</small></div>${chip(c)}
     </div>`).join("") : `<p class="mute" style="padding:14px">אין תיקים כאן.</p>`;
-  document.querySelectorAll(".row").forEach(r => r.onclick = () => openCase(r.dataset.p));
 }
+// one listener for the whole list (rows are rebuilt on every render)
+$("#rows").onclick = e => { const r = e.target.closest(".row"); if (r) openCase(r.dataset.p); };
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.remove("on")); t.classList.add("on"); VIEW = t.dataset.v; render();
 });
@@ -220,16 +225,35 @@ function msgs(c){
 const wa = (phone, text) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 
 // ---------- case panel ----------
-async function openCase(phone){
-  SEL = phone; render();
+// the panel draws at once from what is already loaded; history and the letter link fill in when they arrive
+const EVENTS = {}, LETTERS = {};
+async function letterUrl(c){
+  const k = c.phone + "|" + c.letter_path + "|" + c.letter_date, hit = LETTERS[k];
+  if (hit && hit.until > Date.now()) return hit.url;
+  const { data } = await SB.storage.from("coll-letters").createSignedUrl(c.letter_path, 3600);
+  if (data) LETTERS[k] = { url: data.signedUrl, until: Date.now() + 50 * 60e3 };
+  return data && data.signedUrl;
+}
+const evHtml = list => list.map(e => `<div class="ev ${e.status.startsWith("שולם") ? "pay" : ""}"><b>${esc(e.status)}</b> · ${new Date(e.at).toLocaleString("he-IL")}${e.note ? "\n" + esc(e.note) : ""}</div>`).join("") || `<p class="mute">אין עדיין.</p>`;
+async function copyImg(src){
+  try {                                       // the clipboard takes PNG only: redraw the JPEG on a canvas
+    const img = new Image(); img.crossOrigin = "anonymous"; img.src = src; await img.decode();
+    const cv = document.createElement("canvas"); cv.width = img.naturalWidth; cv.height = img.naturalHeight; cv.getContext("2d").drawImage(img, 0, 0);
+    const png = await new Promise(r => cv.toBlob(r, "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    toast("התמונה הועתקה, להדביק בוואטסאפ");
+  } catch (e) { toast("הדפדפן לא מאפשר להעתיק תמונה. ללחוץ עליה עם הלחצן הימני ← העתק תמונה"); }
+}
+function openCase(phone){
+  const prev = SEL; SEL = phone;
+  document.querySelector(`.row[data-p="${prev}"]`)?.classList.remove("sel");
+  document.querySelector(`.row[data-p="${phone}"]`)?.classList.add("sel");
   const c = CASES.find(x => x.phone === phone);
-  const [ev, url] = await Promise.all([
-    SB.from("coll_events").select("*").eq("phone", phone).order("at", {ascending: false}),
-    c.letter_path ? SB.storage.from("coll-letters").createSignedUrl(c.letter_path, 3600) : Promise.resolve({data: null})]);
+  if (!c) { $("#det").innerHTML = `<p class="mute">התיק לא נמצא.</p>`; return; }
   const { steps, replies } = msgs(c), todo = next(c);
   $("#det").innerHTML = `
     <h2>${esc(c.name)} ${chip(c)}</h2>
-    <div class="mute">${esc(c.case_type)} · <b>${esc(c.total)}</b> · ${esc(local(c.phone))} · ${esc(c.email)}</div>
+    <div class="mute">${esc(c.case_type)} · <b>${esc(c.total)}</b> · <span class="ph">${esc(local(c.phone))}</span> · ${esc(c.email)}</div>
     ${todo ? `<div class="card" style="background:#eef4ff;border-color:#c7d7fe;margin-top:10px"><b>הצעד הבא:</b> ${todo}</div>` : ""}
     <h3>סטטוס</h3>
     <div class="btns">${STATUSES.filter(s => s !== "חדש").map(s => `<button class="btn ${s === c.status ? "p" : ""}" data-st="${s}">${s}</button>`).join("")}</div>
@@ -238,10 +262,11 @@ async function openCase(phone){
     ${steps.map(([t, st, b]) => `<details class="msg" ${todo && t.length && ((c.status === "חדש" && t.startsWith("1")) || (todo.includes("תזכורת") && !todo.includes("אחרונה") && t.startsWith("2")) || (todo.includes("מכתב") && t.startsWith("3")) || (todo.includes("אחרונה") && t.startsWith("4"))) ? "open" : ""}>
       <summary>${esc(t)}</summary><pre>${esc(b)}</pre>
       <a class="btn p" href="${wa(phone, b)}" target="_blank" data-after="${st}">פתח בוואטסאפ</a> <button class="btn" data-copy="${esc(b)}">העתק</button>
-      ${t.startsWith("3") ? (url.data ? `<a class="btn" href="${url.data.signedUrl}" target="_blank">הורד מכתב PDF</a>` : `<span class="chip">מכתב בהכנה</span>`) : ""}</details>`).join("")}
+      ${t.startsWith("3") ? (c.letter_path ? `<a class="btn" id="letter" target="_blank">טוען מכתב…</a>` : `<span class="chip">מכתב בהכנה</span>`) : ""}</details>`).join("")}
 
     <h3>תשובות לטענות</h3>
-    ${replies.map(([t, b, img]) => `<details class="msg"><summary>${esc(t)}</summary>${img ? `<p><a href="${img}" target="_blank">התמונה לשליחה</a></p>` : ""}<pre>${esc(b)}</pre>
+    ${replies.map(([t, b, img]) => `<details class="msg"><summary>${esc(t)}</summary>${img ? `<img class="shot" src="${img}" alt="התמונה לשליחה" crossorigin="anonymous" data-zoom="${img}">
+      <button class="btn" data-img="${img}">העתק תמונה</button>` : ""}<pre>${esc(b)}</pre>
       <a class="btn p" href="${wa(phone, b)}" target="_blank" data-after="בתהליך">פתח בוואטסאפ</a> <button class="btn" data-copy="${esc(b)}">העתק</button></details>`).join("")}
 
     <h3>הזמנות ומשלוחים</h3>
@@ -250,18 +275,37 @@ async function openCase(phone){
     <div class="mute" style="font-size:13px">${esc(c.address || "")}</div>
 
     <h3>היסטוריה</h3>
-    ${(ev.data || []).map(e => `<div class="ev ${e.status.startsWith("שולם") ? "pay" : ""}"><b>${esc(e.status)}</b> · ${new Date(e.at).toLocaleString("he-IL")}${e.note ? "\n" + esc(e.note) : ""}</div>`).join("") || `<p class="mute">אין עדיין.</p>`}`;
+    <div id="hist">${EVENTS[phone] ? evHtml(EVENTS[phone]) : `<p class="mute">טוען…</p>`}</div>`;
   document.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
+  document.querySelectorAll("[data-img]").forEach(b => b.onclick = () => copyImg(b.dataset.img));
+  document.querySelectorAll("[data-zoom]").forEach(i => i.onclick = () => window.open(i.dataset.zoom, "_blank"));
+  SB.from("coll_events").select("*").eq("phone", phone).order("at", {ascending: false}).then(({ data }) => {
+    EVENTS[phone] = data || [];
+    if (SEL === phone && $("#hist")) $("#hist").innerHTML = evHtml(EVENTS[phone]);
+  });
+  if (c.letter_path) letterUrl(c).then(u => {
+    const a = SEL === phone && $("#letter"); if (!a) return;
+    if (u) { a.href = u; a.textContent = "הורד מכתב PDF"; } else a.textContent = "המכתב לא נטען, לפתוח שוב את התיק";
+  });
+  // optimistic: the screen moves at once, the server call runs behind it; on an error the case goes back as it was
   const save = async st => {
+    const c = CASES.find(x => x.phone === phone); if (!c) return;   // the background refresh may have replaced the objects
+    const before = { ...c }, now = new Date().toISOString();
+    Object.assign(c, { status: st, last_action_at: now, done_at: st === DONE ? now : c.done_at,
+                       agent_touched_at: c.agent_touched_at || (st !== "חדש" && !ADMIN ? now : null) });
+    (EVENTS[phone] = EVENTS[phone] || []).unshift({ status: st, at: now });
+    toast("סטטוס: " + st); kpis(); render(); openCase(phone);
     const { error } = await SB.rpc("coll_set_status", { p_phone: phone, p_status: st });
-    if (error) return toast("שגיאה: " + error.message);
-    toast("סטטוס: " + st); await load(); if (CASES.find(x => x.phone === phone)) openCase(phone);
+    if (error) {
+      Object.assign(c, before); EVENTS[phone].shift();
+      toast("שגיאה, הסטטוס לא נשמר: " + error.message); kpis(); render(); if (SEL === phone) openCase(phone);
+    }
   };
   document.querySelectorAll("[data-st]").forEach(b => b.onclick = () => save(b.dataset.st));
   // sending a step from here also moves the status (a reply only moves a new case to "in progress")
   document.querySelectorAll("[data-after]").forEach(b => b.addEventListener("click", () => {
-    const st = b.dataset.after;
-    if (st === "בתהליך" ? c.status === "חדש" || c.status === "נשלחה הודעה" : true) save(st);
+    const st = b.dataset.after, cur = (CASES.find(x => x.phone === phone) || c).status;
+    if (st === "בתהליך" ? cur === "חדש" || cur === "נשלחה הודעה" : true) setTimeout(() => save(st));   // after the link has opened
   }));
 }
 
