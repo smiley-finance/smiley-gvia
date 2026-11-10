@@ -5,81 +5,232 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Smiley · מחלקת גבייה</title>
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--ink:#16181d;--mute:#6b7280;--line:#e5e7eb;--acc:#2563eb;--ok:#15803d;--okbg:#dcfce7;--warn:#b45309;--warnbg:#fef3c7;--bad:#b91c1c;--badbg:#fee2e2}
-*{box-sizing:border-box}body{margin:0;font-family:Heebo,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+:root{--bg:#f3f4fa;--card:#fff;--ink:#1b1d2a;--mute:#6b7085;--line:#e4e6f0;--soft:#f7f8fc;
+  --acc:#4f46e5;--acc2:#7c3aed;--accbg:#eef0ff;--wa:#16a34a;
+  --ok:#15803d;--okbg:#dcfce7;--warn:#b45309;--warnbg:#fef3c7;--bad:#b91c1c;--badbg:#fee2e2;--new:#2563eb;--newbg:#dbeafe;
+  --r:14px;--sh:0 1px 2px rgba(20,22,40,.05),0 4px 14px rgba(20,22,40,.05)}
+*{box-sizing:border-box}
+body{margin:0;font-family:Heebo,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5}
 button,input,select,textarea{font:inherit}
-.wrap{max-width:1200px;margin:0 auto;padding:16px}
-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-header h1{font-size:20px;margin:0}header .sp{flex:1}
-.tabs{display:flex;gap:6px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:var(--card);padding:7px 14px;border-radius:999px;cursor:pointer}
-.tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}.kpi b{display:block;font-size:22px}.kpi span{color:var(--mute);font-size:13px}
-.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:14px}
-@media(max-width:860px){.grid{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
-.list{max-height:calc(100vh - 250px);overflow:auto;padding:0}
-.row{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer}
-.row:hover{background:#f3f4f6}.row.sel{background:#eef2ff}.row .n{flex:1;min-width:0}.row .n small{display:block;color:var(--mute)}
-.ph{direction:ltr;unicode-bidi:isolate}
-.shot{display:block;max-width:220px;border:1px solid var(--line);border-radius:8px;margin:6px 0;cursor:zoom-in}
-.chip{font-size:12px;padding:2px 8px;border-radius:999px;background:#eef0f3;white-space:nowrap}
-.chip.ok{background:var(--okbg);color:var(--ok)}.chip.warn{background:var(--warnbg);color:var(--warn)}.chip.bad{background:var(--badbg);color:var(--bad)}
-.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.tools input,.tools select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+a{color:var(--acc)}
+.wrap{max-width:1320px;margin:0 auto;padding:0 16px 24px}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 -16px 16px;padding:14px 24px;
+  background:linear-gradient(110deg,var(--acc),var(--acc2));color:#fff;box-shadow:var(--sh)}
+header h1{font-size:19px;margin:0;font-weight:800;display:flex;align-items:center;gap:10px;white-space:nowrap}
+header h1 .logo{width:34px;height:34px;border-radius:10px;background:#fff;color:var(--acc);display:grid;place-items:center;font-size:20px}
+header .sp{flex:1}
+header #who{color:rgba(255,255,255,.85);font-size:13px}
+header .btn{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
+header .btn:hover{background:rgba(255,255,255,.25)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;background:rgba(255,255,255,.14);padding:4px;border-radius:999px}
+.tab{border:0;background:transparent;color:#fff;padding:7px 16px;border-radius:999px;cursor:pointer;font-weight:500}
+.tab:hover{background:rgba(255,255,255,.15)}
+.tab.on{background:#fff;color:var(--acc)}
+
+/* ---------- KPIs ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sh)}
+.kpi b{display:block;font-size:24px;font-weight:800;line-height:1.2}.kpi span{color:var(--mute);font-size:13px}
+.kpi.main{background:linear-gradient(135deg,#fff,var(--accbg));border-color:#d9dcfb}
+.pbar{height:8px;border-radius:99px;background:#e3e5f6;overflow:hidden;margin:8px 0 4px}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:99px;transition:width .4s}
+.kpi small{display:block;font-size:12px;color:var(--mute)}
+
+/* ---------- cases: list + panel ---------- */
+.grid{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.4fr);gap:16px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
+.list,#det{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+.list{padding:0}
+.tools{position:sticky;top:0;z-index:2;background:var(--card);display:flex;gap:8px;flex-wrap:wrap;padding:12px;border-bottom:1px solid var(--line)}
+.tools input,.tools select{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
 .tools input{flex:1;min-width:160px}
-h2{font-size:18px;margin:0 0 4px}h3{font-size:15px;margin:16px 0 6px}
+.tools input:focus,.tools select:focus{outline:2px solid var(--accbg);border-color:var(--acc)}
+.lbar{width:100%;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}.lbar .sp{flex:1}
+#upd.bad{color:var(--bad);font-weight:700}
+.btn.sm{padding:4px 10px;font-size:13px;border-radius:8px}
+#rf.busy{opacity:.6;pointer-events:none}
+.spin{width:28px;height:28px;margin:0 auto 10px;border:3px solid var(--accbg);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.qc{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.steps .btn.sure{background:var(--bad);border-color:var(--bad);color:#fff}
+.tbtn{background:#fff;color:var(--ink);border:0;border-radius:6px;padding:3px 10px;cursor:pointer;font-weight:700}
+.row{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;border-right:4px solid transparent;transition:background .12s}
+.row:hover{background:var(--soft)}.row.sel{background:var(--accbg)}
+.row.u-hot{border-right-color:var(--bad)}.row.u-due{border-right-color:#f59e0b}.row.u-new{border-right-color:var(--new)}
+.row.done{opacity:.55}.row.done .todo{color:var(--ok)}
+.row .n{flex:1;min-width:0}.row .n b{font-weight:700}.row .n small{display:block;color:var(--mute);font-size:13px}
+.row .todo{font-weight:500;color:var(--ink)!important}
+.row.u-hot .todo{color:var(--bad)!important}
+.row .side{display:flex;flex-direction:column;align-items:flex-start;gap:4px;flex-shrink:0}
+.age{font-size:12px;color:var(--mute)}
+.age.old{color:var(--bad);font-weight:700}
+.sec{padding:8px 14px;font-size:12px;font-weight:700;color:var(--mute);background:var(--soft);border-bottom:1px solid var(--line)}
+.ph{direction:ltr;unicode-bidi:isolate}
+.chip{font-size:12px;padding:2px 9px;border-radius:999px;background:#eef0f3;white-space:nowrap;font-weight:500}
+.chip.ok{background:var(--okbg);color:var(--ok)}.chip.warn{background:var(--warnbg);color:var(--warn)}.chip.bad{background:var(--badbg);color:var(--bad)}
+
+/* ---------- case panel ---------- */
+#det{padding:0}
+.dhead{position:sticky;top:0;z-index:2;background:var(--card);padding:16px 18px 12px;border-bottom:1px solid var(--line)}
+.dhead h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--mute);font-size:14px}
+.meta b{color:var(--ink);font-size:16px}
+.dbody{padding:16px 18px}
+.empty{padding:48px 18px;text-align:center;color:var(--mute)}
+.empty .big{font-size:40px}
+h2{font-size:20px;margin:0 0 4px;font-weight:800}h3{font-size:14px;margin:18px 0 8px;color:var(--mute);font-weight:700}
 .mute{color:var(--mute)}.btns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
-.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}.btn.g{background:var(--ok);border-color:var(--ok);color:#fff}
-.order{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:14px}
-.msg{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;background:#fafafa}
-.msg pre{white-space:pre-wrap;font:inherit;margin:6px 0 0;font-size:14px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 14px;cursor:pointer;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center;gap:6px;font-weight:500;transition:transform .05s,background .12s}
+.btn:hover{background:var(--soft)}.btn:active{transform:translateY(1px)}
+.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}.btn.p:hover{background:#4338ca}
+.btn.g{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.wa{background:var(--wa);border-color:var(--wa);color:#fff}.btn.wa:hover{background:#15803d}
+.btn.big{padding:11px 20px;font-size:16px}
+.back{display:none}
+
+/* next step card */
+.nextc{border-radius:var(--r);padding:16px;background:linear-gradient(135deg,var(--accbg),#f5f0ff);border:1px solid #d9dcfb}
+.nextc.hot{background:linear-gradient(135deg,var(--badbg),#fff5f5);border-color:#fecaca}
+.nextc.calm{background:var(--okbg);border-color:#bbf7d0}
+.nextc .lbl{font-size:12px;font-weight:700;color:var(--mute);letter-spacing:.02em}
+.nextc .what{font-size:19px;font-weight:800;margin:2px 0 10px}
+.nextc pre{white-space:pre-wrap;font:inherit;font-size:14px;margin:0 0 12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-height:190px;overflow:auto}
+
+/* status step bar */
+.steps{display:flex;gap:0;flex-wrap:wrap;margin:0}
+.steps .btn{border-radius:0;margin-inline-start:-1px;padding:9px 12px;font-size:14px;background:#fff;color:var(--mute)}
+.steps .btn:first-child{border-radius:0 10px 10px 0;margin:0}.steps .btn:last-child{border-radius:10px 0 0 10px}
+.steps .btn.past{background:var(--soft);color:var(--ink)}
+.steps .btn.past::before{content:"✓";color:var(--ok);font-weight:700}
+.steps .btn.p{color:#fff;position:relative;z-index:1;box-shadow:0 2px 8px rgba(79,70,229,.35)}
+.hint{font-size:12px;color:var(--mute);margin-top:6px}.btns .hint,.msg .hint{width:100%}
+
+/* panel tabs */
+.ptabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:18px 0 12px;overflow-x:auto}
+.ptab{border:0;background:none;padding:9px 12px;cursor:pointer;color:var(--mute);font-weight:500;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.ptab.on{color:var(--acc);border-bottom-color:var(--acc)}
+.ptab .cnt{font-size:11px;background:var(--soft);border-radius:99px;padding:0 6px;margin-inline-start:4px}
+
+.order{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:14px;background:var(--soft)}
+.msg{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;background:#fff}
+.msg[open]{border-color:#c7cbf7;background:#fbfbff}
+.msg.hl{border-color:var(--acc);box-shadow:0 0 0 2px var(--accbg)}
+.msg pre{white-space:pre-wrap;font:inherit;margin:8px 0;font-size:14px}
 .msg summary{cursor:pointer;font-weight:500}
-form.st{display:grid;grid-template-columns:1fr 1fr;gap:8px}form.st textarea{grid-column:1/-1;min-height:60px}form.st label{display:flex;gap:6px;align-items:center}form.st label input{width:auto}
-form.st select,form.st input,form.st textarea{padding:8px;border:1px solid var(--line);border-radius:8px;width:100%}
-.ev{font-size:13px;border-right:3px solid var(--line);padding:4px 10px;margin:6px 0;white-space:pre-wrap}
-.ev.pay{border-color:var(--ok)}
-table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:right;padding:8px;border-bottom:1px solid var(--line)}th{color:var(--mute);font-weight:500}
-.login{max-width:360px;margin:12vh auto}.login input{width:100%;padding:10px;margin:6px 0;border:1px solid var(--line);border-radius:8px}
-.toast{position:fixed;bottom:16px;left:16px;background:var(--ink);color:#fff;padding:10px 14px;border-radius:8px;display:none}
+.shot{display:block;max-width:220px;border:1px solid var(--line);border-radius:8px;margin:8px 0;cursor:zoom-in}
+.ev{font-size:13px;border-right:3px solid var(--line);padding:6px 12px;margin:8px 0;white-space:pre-wrap;background:var(--soft);border-radius:8px 0 0 8px}
+.ev.pay{border-color:var(--ok);background:var(--okbg)}
+
+/* all cases: board, one column per status */
+#vCases.board{grid-template-columns:minmax(0,1fr)}
+#vCases.board .list{position:static;max-height:none;overflow:hidden;min-width:0}
+body.wide{overflow-x:hidden}
+#vCases.board .tools{position:static}
+body.wide .wrap{max-width:none}
+.kbox{margin:12px;border:1px solid var(--line);border-radius:12px;background:#fbfbfe;overflow:hidden;min-width:0;max-width:100%}
+/* the board's own scrollbar, flipped to sit on top of the columns (no fake bar to keep in sync) */
+.kb{max-width:100%;overflow-x:auto;overflow-y:hidden;transform:rotateX(180deg);scrollbar-width:thin;scrollbar-color:#b9bdf0 #eceef7}
+.kb::-webkit-scrollbar{height:8px}.kb::-webkit-scrollbar-track{background:#eceef7;border-radius:99px;margin:0 12px}
+.kb::-webkit-scrollbar-thumb{background:#b9bdf0;border-radius:99px}.kb::-webkit-scrollbar-thumb:hover{background:var(--acc)}
+.kbin{display:grid;grid-template-columns:repeat(var(--n,6),minmax(260px,1fr));gap:12px;padding:10px 12px 12px;align-items:start;transform:rotateX(180deg)}
+.col{background:var(--soft);border:1px solid var(--line);border-top:4px solid var(--c,#cbd5e1);border-radius:12px;display:flex;flex-direction:column;height:var(--h,calc(100vh - 290px));min-height:300px}
+.colh{padding:10px 12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);background:#fff;border-radius:8px 8px 0 0}
+.colh b{font-size:15px}.colh .cnt{font-size:12px;background:var(--soft);border-radius:99px;padding:0 8px;font-weight:700}
+.colh small{width:100%;color:var(--mute);font-size:12px}
+.colx{margin-inline-start:auto;border:0;background:none;cursor:pointer;color:var(--mute);font-size:15px;padding:0 4px;border-radius:6px}.colx:hover{background:var(--soft);color:var(--ink)}
+.col.min{cursor:pointer;align-items:center;padding:12px 0;gap:10px}.col.min:hover{background:#fff}
+.col.min b{writing-mode:vertical-rl;font-size:14px}.col.min .cnt{font-size:12px;background:#fff;border-radius:99px;padding:0 7px;font-weight:700}
+.colb{overflow-y:auto;padding:8px;flex:1}
+.colb .empty{padding:24px 8px;font-size:13px}
+.col .row{background:#fff;border:1px solid var(--line);border-right-width:4px;border-radius:10px;margin-bottom:8px;flex-wrap:wrap;padding:10px 12px;box-shadow:0 1px 2px rgba(20,22,40,.04)}
+.col .row:hover{box-shadow:0 4px 12px rgba(20,22,40,.08)}
+.col .row.sel{background:var(--accbg);border-color:var(--acc)}
+.col .row{display:block;overflow:hidden}
+.col .row .n{width:100%;min-width:0}
+.col .row .n b,.col .row .n small{overflow-wrap:anywhere;word-break:break-word}
+.col .row .n b{display:block;line-height:1.3}
+.col .row .side{flex-direction:row;flex-wrap:wrap;width:100%;align-items:center;justify-content:space-between;gap:4px 8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.col .row .side>*{min-width:0;overflow-wrap:anywhere}
+.col .row .chip{white-space:normal}
+.col .row .chip{display:none}.col .row .chip.bad,.col .row .chip.warn{display:inline}
+#vCases.board #det{position:fixed;top:0;left:0;bottom:0;width:min(660px,100%);max-height:none;z-index:20;border-radius:0;border:0;box-shadow:8px 0 40px rgba(20,22,40,.25)}
+#vCases.board:not(.open) #det,#vCases:not(.board) .shade,#vCases.board:not(.open) .shade{display:none}
+.shade{position:fixed;inset:0;background:rgba(20,22,40,.35);z-index:19}
+#vCases.board .back{display:inline-flex}
+
+/* payroll */
+#vPay{padding:20px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:right;padding:10px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--mute);font-weight:500;background:var(--soft)}tr:hover td{background:#fbfbfe}
+
+/* login */
+.login{max-width:380px;margin:14vh auto;padding:28px;text-align:center}
+.login .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 12px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;display:grid;place-items:center;font-size:30px}
+.login input{width:100%;padding:11px 12px;margin:6px 0;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.toast{position:fixed;bottom:18px;left:18px;background:var(--ink);color:#fff;padding:11px 16px;border-radius:10px;display:none;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.2);z-index:9}
+.banner{background:var(--warnbg);border-color:#fcd34d;margin-bottom:12px}
 .hide{display:none!important}
+
+/* phone: list and case are two screens */
+@media(max-width:860px){
+  .grid{grid-template-columns:1fr}
+  .list,#det{position:static;max-height:none}
+  #vCases.open .list{display:none}
+  #vCases:not(.open) #det{display:none}
+  .back{display:inline-flex;margin-bottom:8px}
+  header{padding:12px 16px}header .sp{display:none}
+  .tabs{order:5;width:100%;justify-content:space-between}.tab{flex:1;padding:7px 8px}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:10px 12px}.kpi b{font-size:19px}
+  .steps .btn{flex:1 1 45%;border-radius:10px!important;margin:3px!important}
+  .btn.big{width:100%;justify-content:center}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div id="login" class="login card hide">
+    <div class="logo">☺</div>
     <h2>מחלקת גבייה · Smiley</h2>
+    <p class="mute" style="margin:0 0 10px">כניסה לחשבון העובד</p>
     <input id="em" type="email" placeholder="אימייל" autocomplete="username">
     <input id="pw" type="password" placeholder="סיסמה" autocomplete="current-password">
-    <button class="btn p" id="go" style="width:100%;justify-content:center;margin-top:6px">כניסה</button>
+    <button class="btn p big" id="go" style="width:100%;justify-content:center;margin-top:8px">כניסה</button>
     <p id="lerr" class="mute"></p>
   </div>
 
   <div id="app" class="hide">
     <header>
-      <h1>מחלקת גבייה · Smiley</h1>
+      <h1><span class="logo">☺</span>מחלקת גבייה · Smiley</h1>
       <div class="tabs">
         <button class="tab on" data-v="queue">לטיפול היום</button>
         <button class="tab" data-v="all">כל התיקים</button>
         <button class="tab" data-v="pay">עמלות ושכר</button>
       </div>
-      <span class="sp"></span><span id="who" class="mute"></span><button class="btn" id="out">יציאה</button>
+      <span class="sp"></span><span id="who"></span><button class="btn" id="out">יציאה</button>
     </header>
-    <div id="banner" class="card hide" style="background:var(--warnbg);border-color:#fcd34d;margin-bottom:10px">מצב עובד: זה מה שהעובד רואה. שינויים שתעשה כאן נשמרים בתיקים, אבל לא נספרים לו לעמלה.</div>
-    <div class="kpis" id="kpis"></div>
+    <div id="banner" class="card banner hide">מצב עובד: זה מה שהעובד רואה. שינויים שתעשה כאן נשמרים בתיקים, אבל לא נספרים לו לעמלה.</div>
+    <div class="kpis" id="kpis"><div class="kpi"><b class="mute">…</b><span>טוען…</span></div></div>
 
     <div id="vCases" class="grid">
       <div class="card list">
-        <div class="tools" style="padding:12px 12px 0">
-          <input id="q" placeholder="חיפוש: שם / טלפון / הזמנה">
+        <div class="tools">
+          <input id="q" placeholder="🔍 חיפוש: שם / טלפון / 4 ספרות אחרונות / הזמנה">
           <select id="fs"><option value="">כל הסטטוסים</option></select>
+          <select id="srt" class="hide" title="מיון בתוך כל עמודה">
+            <option value="">מיון: לפי תאריך המחלוקת</option><option value="old">מיון: הכי הרבה זמן בלי טיפול</option>
+            <option value="amt">מיון: סכום גבוה קודם</option><option value="name">מיון: לפי שם</option></select>
+          <div class="lbar"><span id="lcount"></span><span class="sp"></span><span id="upd"></span><button class="btn sm" id="rf" title="רענון עכשיו">↻ רענון</button></div>
         </div>
-        <div id="rows"></div>
+        <div id="rows"><div class="empty"><div class="spin"></div>טוען תיקים…</div></div>
       </div>
-      <div class="card" id="det"><p class="mute">בחר/י תיק מהרשימה.</p></div>
+      <div class="shade" id="shade"></div>
+      <div class="card" id="det"><div class="empty"><div class="big">👈</div>בחר/י תיק מהרשימה.</div></div>
     </div>
 
     <div id="vPay" class="card hide"></div>
@@ -89,10 +240,12 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:right;
 
 <script>
 const SB = supabase.createClient("https://tlxuqxlqzcpelcfdtjax.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRseHVxeGxxemNwZWxjZmR0amF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMDUzNDcsImV4cCI6MjA5NTg4MTM0N30.M_Pe6uLqhh_cj8SzPLTMJA9VtjFT0h1dWNmLc_WZxCs");
-const STATUSES = ["חדש","נשלחה הודעה","בתהליך","בוצע – ממתין לאימות","נשלח מכתב התראה","סגור"];
+const HOLD = "בבדיקה/המתנה";                                  // PROPOSED new status (design only): the server does not accept it yet, see save()
+const STATUSES = ["חדש","נשלחה הודעה","בתהליך",HOLD,"בוצע – ממתין לאימות","נשלח מכתב התראה","סגור"];
 const DONE = "בוצע – ממתין לאימות";
 const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
 let ME = null, ADMIN = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "queue", SEL = null;
+let PTAB = "msgs", LIST = [];                                   // design only: open tab inside the case panel, order of the list on screen
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ils = n => "₪" + Number(n || 0).toLocaleString("he-IL", {minimumFractionDigits: 0, maximumFractionDigits: 2});
@@ -105,7 +258,25 @@ const local = p => p ? "0" + p.slice(3) : "";
 const isPaid = c => Number(c.paid_amount || 0) * 100 >= c.amount - 1;
 const boss = () => ADMIN && !AGENT_VIEW;
 const ls = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch (e) { return null; } };
-function toast(t){ const e = $("#toast"); e.textContent = t; e.style.display = "block"; setTimeout(() => e.style.display = "none", 2200); }
+const jday = iso => new Date(iso).toLocaleDateString("en-CA", {timeZone: "Asia/Jerusalem"});
+const doneToday = c => !!c.last_action_at && jday(c.last_action_at) === jday(Date.now());   // display only: handled today
+let TT;
+function toast(t, undo){                                       // undo = optional function: shows a "ביטול" button for a few seconds
+  const e = $("#toast"); clearTimeout(TT);
+  e.innerHTML = esc(t) + (undo ? ` <button class="tbtn" id="tundo">↶ ביטול</button>` : "");
+  e.style.display = "flex";
+  if (undo) $("#tundo").onclick = () => { e.style.display = "none"; undo(); };
+  TT = setTimeout(() => e.style.display = "none", undo ? 7000 : 2200);
+}
+// design only: per-viewer conveniences kept in this browser
+let SORT = ls("sort") || "", MIN = new Set(["סגור"]), LOADED_AT = 0, LOAD_FAIL = false;
+try { const m = JSON.parse(ls("minCols")); if (Array.isArray(m)) MIN = new Set(m); } catch (e) {}
+function upd(){                                                // "updated X min ago" next to the list
+  const e = $("#upd"); if (!LOADED_AT) return;
+  const m = Math.floor((Date.now() - LOADED_AT) / 60e3);
+  e.textContent = (LOAD_FAIL ? "⚠ הרענון האחרון נכשל · " : "") + (m < 1 ? "עודכן עכשיו" : `עודכן לפני ${m} דק'`);
+  e.classList.toggle("bad", LOAD_FAIL);
+}
 
 // ---------- auth ----------
 async function start(){
@@ -121,8 +292,12 @@ async function start(){
   }
   mode();
   STATUSES.forEach(s => $("#fs").insertAdjacentHTML("beforeend", `<option>${s}</option>`));
+  const v = ls("view");                                        // open on the tab used last time
+  if (["queue", "all", "pay"].includes(v)) { VIEW = v; document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.v === v)); }
+  $("#srt").value = SORT;
   await load();
   setInterval(() => document.visibilityState === "visible" && load(), 3 * 60e3);   // payments verified in the background drop off the list
+  setInterval(upd, 30e3);
 }
 function mode(){
   $("#banner").classList.toggle("hide", !(ADMIN && AGENT_VIEW));
@@ -140,11 +315,13 @@ async function load(){
     SB.from("coll_cases").select("*").eq("removed", false).order("latest", {ascending: false}),
     SB.from("coll_payments").select("*").order("paid_at", {ascending: false}),
     SB.from("coll_payouts").select("*")]);
-  if (c.error) return toast("לא הצלחתי לרענן את התיקים, מנסה שוב בעוד כמה דקות");
+  if (c.error) { LOAD_FAIL = true; upd(); return toast("לא הצלחתי לרענן את התיקים, מנסה שוב בעוד כמה דקות"); }
   CASES = (c.data || []).filter(x => !isPaid(x));            // paid and verified = gone from the desk
   PAYS = p.data || []; PAYOUTS = o.data || [];
+  LOADED_AT = Date.now(); LOAD_FAIL = false; upd();
   kpis(); render();
 }
+$("#rf").onclick = async () => { const b = $("#rf"); b.classList.add("busy"); b.textContent = "מרענן…"; await load(); b.classList.remove("busy"); b.textContent = "↻ רענון"; };
 
 // ---------- what to do next (written channel only: WhatsApp) ----------
 // day 0 first message -> day 3 reminder -> day 8 (or a refusal) letter -> 11 days after the letter final reminder -> closed
@@ -162,10 +339,17 @@ function next(c){
   }
   return null;
 }
+// display only: how urgent a row looks (red / amber / blue)
+function urg(c){
+  const t = next(c); if (!t) return "";
+  if (c.status === "חדש") return "new";
+  return /מכתב|לא נמצא|אחרונה/.test(t) ? "hot" : "due";
+}
 function kpis(){
   const m = ym(today()), mine = PAYS.filter(p => p.month === m && p.commissionable);
-  $("#kpis").innerHTML = [
-    ["לטיפול היום", CASES.filter(next).length],
+  const left = CASES.filter(next).length, done = CASES.filter(c => !next(c) && doneToday(c)).length, pct = left + done ? Math.round(done * 100 / (left + done)) : 100;
+  $("#kpis").innerHTML = `<div class="kpi main"><b>${left}</b><span>לטיפול היום</span>
+      <div class="pbar"><i style="width:${pct}%"></i></div><small>טופלו היום: ${done} מתוך ${left + done}</small></div>` + [
     ["תיקים פתוחים", CASES.filter(c => c.status !== "סגור").length + " · " + ils(CASES.filter(c => c.status !== "סגור").reduce((s, c) => s + c.amount / 100, 0))],
     ["נגבה החודש", ils(mine.reduce((s, p) => s + p.amount - p.refunded, 0))],
     ["עמלה החודש (20%)", ils(mine.reduce((s, p) => s + Number(p.commission), 0))],
@@ -175,27 +359,81 @@ function chip(c){
   if (c.status === DONE) return days(c.done_at) >= 1 ? `<span class="chip bad">לא נמצא תשלום</span>` : `<span class="chip warn">ממתין לאימות</span>`;
   return `<span class="chip ${c.status === "סגור" ? "" : c.status === "נשלח מכתב התראה" ? "bad" : ""}">${esc(c.status)}</span>`;
 }
+const rowHtml = c => {
+  const t = next(c), d = days(c.last_action_at || c.latest), dn = !t && doneToday(c);
+  return `
+    <div class="row u-${urg(c)} ${dn ? "done" : ""} ${SEL === c.phone ? "sel" : ""}" data-p="${c.phone}">
+      <div class="n"><b>${esc(c.name)}</b><small class="ph">${esc(local(c.phone))}</small>
+        <small>${esc(c.case_type)}</small>${t ? `<small class="todo">→ ${t}</small>` : dn ? `<small class="todo">✓ טופל היום</small>` : ""}</div>
+      <div class="side">${chip(c)}<b style="font-size:14px">${esc(c.total)}</b>${d < 999 ? `<span class="age ${t && d >= 7 ? "old" : ""}">${d ? `לפני ${d} ימים` : "היום"}</span>` : ""}</div>
+    </div>`;
+};
 function render(){
   $("#vCases").classList.toggle("hide", VIEW === "pay"); $("#vPay").classList.toggle("hide", VIEW !== "pay");
+  if (VIEW === "pay") document.body.classList.remove("wide");
   if (VIEW === "pay") return payroll();
   const q = $("#q").value.trim().toLowerCase(), fs = $("#fs").value;
-  let list = VIEW === "queue" ? CASES.filter(next) : CASES;
+  let list = VIEW === "queue" ? CASES.filter(c => next(c) || doneToday(c)) : CASES;   // handled today stays on screen, greyed, at the bottom
   if (fs) list = list.filter(c => c.status === fs);
-  if (q) list = list.filter(c => [c.name, c.phone, local(c.phone), c.orders_label, c.email].join(" ").toLowerCase().includes(q));
+  if (q) list = list.filter(c => hit(c, q));
+  let html = "";
   if (VIEW === "queue"){                                        // follow-ups first, then new cases (newest disputes first)
     const rank = c => c.status === "חדש" ? 1 : 0;
-    list = [...list].sort((a, b) => rank(a) - rank(b) || (b.latest || "").localeCompare(a.latest || ""));
+    const todo = list.filter(next).sort((a, b) => rank(a) - rank(b) || (b.latest || "").localeCompare(a.latest || ""));
+    const done = list.filter(c => !next(c));
+    list = [...todo, ...done];
+    html = todo.map(rowHtml).join("") + (done.length ? `<div class="sec">✓ טופלו היום (${done.length})</div>` + done.map(rowHtml).join("") : "");
+    $("#lcount").textContent = `${todo.length} תיקים ממתינים לטיפול`;
+  } else {                                                      // all cases: a board, one column per status, each column scrolls on its own
+    const cols = fs ? [fs] : STATUSES, mini = s => !fs && MIN.has(s);   // collapsed columns (click to open again)
+    const by = { old: (a, b) => (a.last_action_at || a.latest || "").localeCompare(b.last_action_at || b.latest || ""),
+                 amt: (a, b) => b.amount - a.amount, name: (a, b) => (a.name || "").localeCompare(b.name || "", "he") }[SORT];
+    list = cols.flatMap(s => { const cs = list.filter(c => c.status === s); return by ? cs.sort(by) : cs; });
+    html = `<div class="kbox"><div class="kb" id="kb"><div class="kbin" style="grid-template-columns:${cols.map(s => mini(s) ? "56px" : "minmax(260px,1fr)").join(" ")}">` + cols.map(s => {
+      const cs = list.filter(c => c.status === s);
+      if (mini(s)) return `<div class="col min" style="--c:${COLC[s]}" data-colt="${s}" title="לחיצה לפתיחת העמודה"><span class="cnt">${cs.length}</span><b>${s}</b></div>`;
+      return `<div class="col" style="--c:${COLC[s]}"><div class="colh"><b>${s}</b><span class="cnt">${cs.length}</span>${fs ? "" : `<button class="colx" data-colt="${s}" title="כיווץ העמודה">⇥</button>`}<small>${ils(cs.reduce((t, c) => t + c.amount / 100, 0))}</small></div>
+        <div class="colb">${cs.map(rowHtml).join("") || `<div class="empty">אין תיקים</div>`}</div></div>`;
+    }).join("") + `</div></div></div>`;
+    $("#lcount").textContent = `${list.length} תיקים`;
   }
-  $("#rows").innerHTML = list.length ? list.map(c => `
-    <div class="row ${SEL === c.phone ? "sel" : ""}" data-p="${c.phone}">
-      <div class="n"><b>${esc(c.name)}</b><small class="ph">${esc(local(c.phone))}</small><small>${esc(c.total)} · ${esc(c.case_type)}${next(c) ? " · " + next(c) : ""}</small></div>${chip(c)}
-    </div>`).join("") : `<p class="mute" style="padding:14px">אין תיקים כאן.</p>`;
+  $("#vCases").classList.toggle("board", VIEW === "all");
+  document.body.classList.toggle("wide", VIEW === "all");      // board uses the full window width
+  $("#srt").classList.toggle("hide", VIEW !== "all");          // sorting is for the board columns
+  LIST = list.map(c => c.phone);
+  const kbOld = $("#kb") ? $("#kb").scrollLeft : 0;
+  $("#rows").innerHTML = list.length || VIEW === "all" ? html : `<div class="empty"><div class="big">🎉</div>אין תיקים כאן.</div>`;
+  if (VIEW === "all") board(kbOld);
 }
+// search: name / phone / order / email. Exactly 4 digits = last 4 digits of the phone (or an order number).
+// Phone numbers can be typed with dashes or spaces.
+function hit(c, q){
+  const qd = q.replace(/[\s\-()+]/g, ""), ph = String(c.phone || "");
+  if (/^\d{4}$/.test(qd)) return ph.endsWith(qd) || String(c.orders_label || "").includes(qd);
+  if (/^\d{5,}$/.test(qd) && (ph.includes(qd) || local(ph).includes(qd))) return true;
+  return [c.name, c.phone, local(c.phone), c.orders_label, c.email].join(" ").toLowerCase().includes(q);
+}
+// board: columns fill the screen height; sideways scrolling is the board's own scrollbar (shown on top by CSS)
+function board(keep){
+  const kb = $("#kb"); if (!kb) return;
+  kb.style.setProperty("--h", Math.max(300, innerHeight - kb.getBoundingClientRect().top - 54) + "px");
+  kb.scrollLeft = keep;                                       // stay where you were after a search / status change
+}
+addEventListener("resize", () => VIEW === "all" && board($("#kb")?.scrollLeft || 0));
+const COLC = {"חדש": "#2563eb", "נשלחה הודעה": "#4f46e5", "בתהליך": "#f59e0b", [HOLD]: "#8b5cf6", [DONE]: "#0d9488", "נשלח מכתב התראה": "#dc2626", "סגור": "#9ca3af"};
+const closeCase = () => $("#vCases").classList.remove("open");
+$("#shade").onclick = closeCase;
+document.addEventListener("keydown", e => e.key === "Escape" && $("#vCases").classList.contains("board") && closeCase());
 // one listener for the whole list (rows are rebuilt on every render)
-$("#rows").onclick = e => { const r = e.target.closest(".row"); if (r) openCase(r.dataset.p); };
+$("#rows").onclick = e => {
+  const t = e.target.closest("[data-colt]");                   // board: collapse / open a column
+  if (t) { const s = t.dataset.colt; MIN.has(s) ? MIN.delete(s) : MIN.add(s); ls("minCols", JSON.stringify([...MIN])); return render(); }
+  const r = e.target.closest(".row"); if (r) openCase(r.dataset.p);
+};
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
-  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on")); t.classList.add("on"); VIEW = t.dataset.v; render();
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on")); t.classList.add("on"); VIEW = t.dataset.v; ls("view", VIEW); render();
 });
+$("#srt").onchange = () => { SORT = $("#srt").value; ls("sort", SORT); render(); };
 $("#q").oninput = render; $("#fs").onchange = render;
 
 // ---------- ready messages (same wording as the guide PDF) ----------
@@ -223,6 +461,9 @@ function msgs(c){
   return { steps, replies };
 }
 const wa = (phone, text) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+// display only: which ready message matches the next step (same rule that opens it in the list of messages)
+const stepOf = (c, todo) => !todo ? -1 : c.status === "חדש" ? 0 : todo.includes("אחרונה") ? 3 : todo.includes("מכתב") ? 2 : todo.includes("תזכורת") ? 1 : -1;
+const replyOf = (replies, todo) => !todo ? -1 : todo.includes("צילום") ? replies.findIndex(r => r[0].includes("כבר שילמתי")) : todo.includes("הקישור") ? 0 : -1;
 
 // ---------- case panel ----------
 // the panel draws at once from what is already loaded; history and the letter link fill in when they arrive
@@ -234,7 +475,15 @@ async function letterUrl(c){
   if (data) LETTERS[k] = { url: data.signedUrl, until: Date.now() + 50 * 60e3 };
   return data && data.signedUrl;
 }
-const evHtml = list => list.map(e => `<div class="ev ${e.status.startsWith("שולם") ? "pay" : ""}"><b>${esc(e.status)}</b> · ${new Date(e.at).toLocaleString("he-IL")}${e.note ? "\n" + esc(e.note) : ""}</div>`).join("") || `<p class="mute">אין עדיין.</p>`;
+const PDFS = {};                                                 // the letter as a file, ready to share (one per case + letter)
+function pdfFile(c){
+  const k = c.phone + "|" + c.letter_path + "|" + c.letter_date;
+  return PDFS[k] = PDFS[k] || letterUrl(c).then(u => u ? fetch(u) : Promise.reject())
+    .then(r => r.ok ? r.blob() : Promise.reject())
+    .then(b => new File([b], `מכתב התראה - ${c.name || local(c.phone)}.pdf`, { type: "application/pdf" }))
+    .catch(e => { delete PDFS[k]; throw e; });
+}
+const evHtml =list => list.map(e => `<div class="ev ${e.status.startsWith("שולם") ? "pay" : ""}"><b>${esc(e.status)}</b> · ${new Date(e.at).toLocaleString("he-IL")}${e.note ? "\n" + esc(e.note) : ""}</div>`).join("") || `<p class="mute">אין עדיין.</p>`;
 async function copyImg(src){
   try {                                       // the clipboard takes PNG only: redraw the JPEG on a canvas
     const img = new Image(); img.crossOrigin = "anonymous"; img.src = src; await img.decode();
@@ -244,38 +493,71 @@ async function copyImg(src){
     toast("התמונה הועתקה, להדביק בוואטסאפ");
   } catch (e) { toast("הדפדפן לא מאפשר להעתיק תמונה. ללחוץ עליה עם הלחצן הימני ← העתק תמונה"); }
 }
-function openCase(phone){
+function openCase(phone, keepScroll){
   const prev = SEL; SEL = phone;
   document.querySelector(`.row[data-p="${prev}"]`)?.classList.remove("sel");
   document.querySelector(`.row[data-p="${phone}"]`)?.classList.add("sel");
+  $("#vCases").classList.add("open");                                   // phone: show the case screen
   const c = CASES.find(x => x.phone === phone);
-  if (!c) { $("#det").innerHTML = `<p class="mute">התיק לא נמצא.</p>`; return; }
-  const { steps, replies } = msgs(c), todo = next(c);
+  if (!c) { $("#det").innerHTML = `<div class="empty">התיק לא נמצא.</div>`; return; }
+  const { steps, replies } = msgs(c), todo = next(c), si = stepOf(c, todo), ri = si < 0 ? replyOf(replies, todo) : -1;
+  const letterBtn = (b, st) => c.letter_path ? `<button class="btn wa" data-pdf="${esc(b)}" data-pst="${st}">📤 שלח PDF ללקוח</button> <a class="btn letter" target="_blank">טוען מכתב…</a>
+      <div class="hint">"שלח PDF" פותח שיתוף עם הקובץ והטקסט (לבחור וואטסאפ). אם השיתוף לא זמין: הקובץ יורד והטקסט מועתק, לגרור את הקובץ לצ'אט ולהדביק.</div>` : `<span class="chip">מכתב בהכנה</span>`;
+  const sendBtns = (b, st, letter, big) => `<a class="btn wa ${big ? "big" : ""}" href="${wa(phone, b)}" target="_blank" data-after="${st}">פתח בוואטסאפ</a> <button class="btn ${big ? "big" : ""}" data-copy="${esc(b)}">העתק</button> ${letter ? letterBtn(b, st) : ""}`;
+  const hit = si >= 0 ? { b: steps[si][2], st: steps[si][1], letter: si === 2, t: steps[si][0] } : ri >= 0 ? { b: replies[ri][1], st: "בתהליך", t: replies[ri][0] } : null;
+  const nIdx = LIST.indexOf(phone), nxt = LIST.slice(nIdx + 1).concat(LIST.slice(0, Math.max(nIdx, 0))).find(p => p !== phone && (VIEW !== "queue" || next(CASES.find(x => x.phone === p) || {})));
+  const cur = STATUSES.indexOf(c.status), tabs = [["msgs", "הודעות לפי הסדר", steps.length], ["replies", "תשובות לטענות", replies.length], ["orders", "הזמנות ומשלוחים", (c.orders || []).length], ["hist", "היסטוריה", ""]];
+  const scroll = $("#det").scrollTop;
   $("#det").innerHTML = `
-    <h2>${esc(c.name)} ${chip(c)}</h2>
-    <div class="mute">${esc(c.case_type)} · <b>${esc(c.total)}</b> · <span class="ph">${esc(local(c.phone))}</span> · ${esc(c.email)}</div>
-    ${todo ? `<div class="card" style="background:#eef4ff;border-color:#c7d7fe;margin-top:10px"><b>הצעד הבא:</b> ${todo}</div>` : ""}
+    <div class="dhead">
+      <button class="btn back" id="back">→ חזרה לרשימה</button>
+      <h2>${esc(c.name)} ${chip(c)}</h2>
+      <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${esc(c.email)}</span></div>
+      <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}</div>
+    </div>
+    <div class="dbody">
+    ${todo ? `<div class="nextc ${urg(c) === "hot" ? "hot" : ""}">
+        <div class="lbl">הצעד הבא</div><div class="what">${todo}</div>
+        ${hit ? `<div class="mute" style="font-size:13px;margin-bottom:4px">${esc(hit.t)}</div><pre>${esc(hit.b)}</pre><div class="btns" style="margin:0">${sendBtns(hit.b, hit.st, hit.letter, true)}</div>` : ""}
+      </div>`
+      : `<div class="nextc calm"><div class="lbl">הצעד הבא</div><div class="what">${doneToday(c) ? "✓ טופל היום. אין צעד פתוח כרגע" : "אין צעד פתוח כרגע"}</div></div>`}
+    ${nxt ? `<div class="btns"><button class="btn p" id="nextCase">לתיק הבא ←</button></div>` : ""}
+
     <h3>סטטוס</h3>
-    <div class="btns">${STATUSES.filter(s => s !== "חדש").map(s => `<button class="btn ${s === c.status ? "p" : ""}" data-st="${s}">${s}</button>`).join("")}</div>
+    <div class="steps">${STATUSES.filter(s => s !== "חדש").map(s => { const i = STATUSES.indexOf(s); return `<button class="btn ${s === c.status ? "p" : i < cur ? "past" : ""}" data-st="${s}" title="לחיצה משנה את הסטטוס">${s}</button>`; }).join("")}</div>
+    <div class="hint">הסטטוס הנוכחי מסומן. לחיצה על שלב אחר משנה את הסטטוס של הלקוח.</div>
 
-    <h3>הודעות לפי הסדר</h3>
-    ${steps.map(([t, st, b]) => `<details class="msg" ${todo && t.length && ((c.status === "חדש" && t.startsWith("1")) || (todo.includes("תזכורת") && !todo.includes("אחרונה") && t.startsWith("2")) || (todo.includes("מכתב") && t.startsWith("3")) || (todo.includes("אחרונה") && t.startsWith("4"))) ? "open" : ""}>
+    <div class="ptabs">${tabs.map(([k, t, n]) => `<button class="ptab ${PTAB === k ? "on" : ""}" data-pt="${k}">${t}${n !== "" ? `<span class="cnt">${n}</span>` : ""}</button>`).join("")}</div>
+
+    <div class="pane" data-pane="msgs">
+    ${steps.map(([t, st, b], i) => `<details class="msg ${i === si ? "hl" : ""}" ${i === si ? "open" : ""}>
       <summary>${esc(t)}</summary><pre>${esc(b)}</pre>
-      <a class="btn p" href="${wa(phone, b)}" target="_blank" data-after="${st}">פתח בוואטסאפ</a> <button class="btn" data-copy="${esc(b)}">העתק</button>
-      ${t.startsWith("3") ? (c.letter_path ? `<a class="btn" id="letter" target="_blank">טוען מכתב…</a>` : `<span class="chip">מכתב בהכנה</span>`) : ""}</details>`).join("")}
+      ${sendBtns(b, st, t.startsWith("3"))}</details>`).join("")}
+    </div>
 
-    <h3>תשובות לטענות</h3>
-    ${replies.map(([t, b, img]) => `<details class="msg"><summary>${esc(t)}</summary>${img ? `<img class="shot" src="${img}" alt="התמונה לשליחה" crossorigin="anonymous" data-zoom="${img}">
+    <div class="pane" data-pane="replies">
+    ${replies.map(([t, b, img], i) => `<details class="msg ${i === ri ? "hl" : ""}" ${i === ri ? "open" : ""}><summary>${esc(t)}</summary>${img ? `<img class="shot" src="${img}" alt="התמונה לשליחה" crossorigin="anonymous" data-zoom="${img}">
       <button class="btn" data-img="${img}">העתק תמונה</button>` : ""}<pre>${esc(b)}</pre>
-      <a class="btn p" href="${wa(phone, b)}" target="_blank" data-after="בתהליך">פתח בוואטסאפ</a> <button class="btn" data-copy="${esc(b)}">העתק</button></details>`).join("")}
+      ${sendBtns(b, "בתהליך")}</details>`).join("")}
+    </div>
 
-    <h3>הזמנות ומשלוחים</h3>
+    <div class="pane" data-pane="orders">
     ${(c.orders || []).map(o => `<div class="order"><b>${esc(o.order)}</b> · ${esc(o.order_date)} · ${esc(o.amount)}<br><span class="mute">${esc(o.products)}</span>
       ${o.shipments.map(s => `<br>${esc(s.carrier)} ${esc(s.tracking)} · <b>${esc(s.status)}</b>${s.date ? " · " + esc(s.date) : ""} · <a href="${s.tracking_url}" target="_blank">מעקב</a>`).join("")}</div>`).join("")}
-    <div class="mute" style="font-size:13px">${esc(c.address || "")}</div>
+    <div class="mute" style="font-size:13px">📍 ${esc(c.address || "")}</div>
+    </div>
 
-    <h3>היסטוריה</h3>
-    <div id="hist">${EVENTS[phone] ? evHtml(EVENTS[phone]) : `<p class="mute">טוען…</p>`}</div>`;
+    <div class="pane" data-pane="hist">
+    <div id="hist">${EVENTS[phone] ? evHtml(EVENTS[phone]) : `<p class="mute">טוען…</p>`}</div>
+    </div>
+    </div>`;
+  const showPane = k => { PTAB = k; document.querySelectorAll("[data-pt]").forEach(b => b.classList.toggle("on", b.dataset.pt === k)); document.querySelectorAll("[data-pane]").forEach(p => p.classList.toggle("hide", p.dataset.pane !== k)); };
+  showPane(PTAB);
+  document.querySelectorAll("[data-pt]").forEach(b => b.onclick = () => showPane(b.dataset.pt));
+  $("#det").scrollTop = keepScroll || prev === phone ? scroll : 0;
+  if (prev !== phone && innerWidth <= 860) scrollTo(0, 0);
+  $("#back").onclick = () => { $("#vCases").classList.remove("open"); document.querySelector(`.row[data-p="${phone}"]`)?.scrollIntoView({block: "center"}); };
+  if ($("#nextCase")) $("#nextCase").onclick = () => { openCase(nxt); document.querySelector(`.row[data-p="${nxt}"]`)?.scrollIntoView({block: "nearest"}); };
   document.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
   document.querySelectorAll("[data-img]").forEach(b => b.onclick = () => copyImg(b.dataset.img));
   document.querySelectorAll("[data-zoom]").forEach(i => i.onclick = () => window.open(i.dataset.zoom, "_blank"));
@@ -284,24 +566,55 @@ function openCase(phone){
     if (SEL === phone && $("#hist")) $("#hist").innerHTML = evHtml(EVENTS[phone]);
   });
   if (c.letter_path) letterUrl(c).then(u => {
-    const a = SEL === phone && $("#letter"); if (!a) return;
-    if (u) { a.href = u; a.textContent = "הורד מכתב PDF"; } else a.textContent = "המכתב לא נטען, לפתוח שוב את התיק";
+    if (SEL !== phone) return;
+    document.querySelectorAll(".letter").forEach(a => { if (u) { a.href = u; a.textContent = "הורד מכתב PDF"; } else a.textContent = "המכתב לא נטען, לפתוח שוב את התיק"; });
   });
   // optimistic: the screen moves at once, the server call runs behind it; on an error the case goes back as it was
-  const save = async st => {
+  const save = async (st, isUndo) => {
+    if (st === HOLD) return toast("סטטוס חדש בהצעה: יופעל אחרי שיאיר יוסיף אותו בשרת");   // PROPOSED: remove this line once coll_set_status accepts HOLD
     const c = CASES.find(x => x.phone === phone); if (!c) return;   // the background refresh may have replaced the objects
     const before = { ...c }, now = new Date().toISOString();
     Object.assign(c, { status: st, last_action_at: now, done_at: st === DONE ? now : c.done_at,
                        agent_touched_at: c.agent_touched_at || (st !== "חדש" && !ADMIN ? now : null) });
     (EVENTS[phone] = EVENTS[phone] || []).unshift({ status: st, at: now });
-    toast("סטטוס: " + st); kpis(); render(); openCase(phone);
+    // undo = the same status call with the previous status (a misclick can be taken back for a few seconds)
+    toast((isUndo ? "הוחזר ל: " : "סטטוס: ") + st, isUndo || before.status === st ? null : () => save(before.status, true));
+    kpis(); render(); if (SEL === phone) openCase(phone);
     const { error } = await SB.rpc("coll_set_status", { p_phone: phone, p_status: st });
     if (error) {
       Object.assign(c, before); EVENTS[phone].shift();
       toast("שגיאה, הסטטוס לא נשמר: " + error.message); kpis(); render(); if (SEL === phone) openCase(phone);
     }
   };
-  document.querySelectorAll("[data-st]").forEach(b => b.onclick = () => save(b.dataset.st));
+  // letter PDF: share the file + text (phone / Windows share), or download it and copy the text
+  if (c.letter_path) pdfFile(c).catch(() => {});                  // fetch ahead so sharing opens at once
+  document.querySelectorAll("[data-pdf]").forEach(b => b.onclick = async () => {
+    const msg = b.dataset.pdf, st = b.dataset.pst;
+    navigator.clipboard.writeText(msg).catch(() => {});
+    b.disabled = true;
+    try {
+      const f = await pdfFile(c);
+      let shared = false;
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        try { await navigator.share({ files: [f], text: msg }); shared = true; }
+        catch (e) { if (e.name === "AbortError") { b.disabled = false; return; } }   // cancelled = nothing happens
+      }
+      if (shared) save(st);                                     // sent = same status move as "פתח בוואטסאפ"
+      else {
+        const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; a.click();
+        toast("הקובץ ירד והטקסט הועתק: לגרור את הקובץ לצ'אט בוואטסאפ ולהדביק");
+      }
+    } catch (e) { toast("לא הצלחתי להכין את ה-PDF, לפתוח שוב את התיק"); }
+    b.disabled = false;
+  });
+  document.querySelectorAll("[data-st]").forEach(b => b.onclick = () => {
+    const cur = (CASES.find(x => x.phone === phone) || c).status;
+    if (b.dataset.st === "סגור" && cur !== "סגור" && !b.classList.contains("sure")) {   // closing asks for a second click
+      b.classList.add("sure"); b.textContent = "ללחוץ שוב לסגירה";
+      return setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = "סגור"; } }, 4000);
+    }
+    save(b.dataset.st);
+  });
   // sending a step from here also moves the status (a reply only moves a new case to "in progress")
   document.querySelectorAll("[data-after]").forEach(b => b.addEventListener("click", () => {
     const st = b.dataset.after, cur = (CASES.find(x => x.phone === phone) || c).status;
@@ -322,15 +635,15 @@ function payroll(){
   $("#vPay").innerHTML = `
     <h2>עמלות ושכר</h2>
     <p class="mute">20% מכל תשלום שאומת ב-Stripe על תיק שעודכן לפני התשלום או עד 48 שעות אחריו. חודש נסגר לפי תאריך התשלום, ומשולם ב-10 לחודש שאחריו. תשלום שהוחזר או הוכחש מקוזז.</p>
-    <table><tr><th>חודש</th><th>תשלומים</th><th>נגבה נטו</th><th>עמלה</th><th>מועד תשלום</th><th>סטטוס</th><th></th></tr>
+    <div class="tbl"><table><tr><th>חודש</th><th>תשלומים</th><th>נגבה נטו</th><th>עמלה</th><th>מועד תשלום</th><th>סטטוס</th><th></th></tr>
     ${rows.map(r => `<tr><td>${r.m}</td><td>${r.n}</td><td>${ils(r.col)}</td><td><b>${ils(r.com)}</b></td><td>${dmy(r.pay)}</td>
       <td>${r.po ? `<span class="chip ok">שולם ${dmy(new Date(r.po.paid_at))}${r.po.ref ? " · " + esc(r.po.ref) : ""}</span>` : r.m === cur ? `<span class="chip">חודש פתוח</span>` : `<span class="chip warn">ממתין לתשלום</span>`}</td>
       <td><button class="btn" data-csv="${r.m}">פירוט CSV</button>${boss() && !r.po && r.m !== cur ? ` <button class="btn g" data-pay="${r.m}">סמן כשולם</button>` : ""}</td></tr>`).join("")}
-    </table>
+    </table></div>
     <h3>תשלומים אחרונים</h3>
-    <table><tr><th>תאריך</th><th>לקוח</th><th>סכום</th><th>הוחזר</th><th>עמלה</th><th>חודש</th></tr>
+    <div class="tbl"><table><tr><th>תאריך</th><th>לקוח</th><th>סכום</th><th>הוחזר</th><th>עמלה</th><th>חודש</th></tr>
     ${PAYS.filter(p => p.commissionable).slice(0, 50).map(p => { const c = CASES.find(x => x.phone === p.phone) || {}; return `<tr><td>${dmy(new Date(p.paid_at))}</td><td>${esc(c.name || p.phone)}</td>
-      <td>${ils(p.amount)}</td><td>${p.refunded ? ils(p.refunded) : ""}</td><td>${p.commissionable ? ils(p.commission) : "ללא"}</td><td>${p.month}</td></tr>`; }).join("")}</table>`;
+      <td>${ils(p.amount)}</td><td>${p.refunded ? ils(p.refunded) : ""}</td><td>${p.commissionable ? ils(p.commission) : "ללא"}</td><td>${p.month}</td></tr>`; }).join("")}</table></div>`;
   document.querySelectorAll("[data-csv]").forEach(b => b.onclick = () => csv(b.dataset.csv));
   document.querySelectorAll("[data-pay]").forEach(b => b.onclick = async () => {
     const ref = prompt("אסמכתא / מספר העברה (לא חובה)") ?? "";
