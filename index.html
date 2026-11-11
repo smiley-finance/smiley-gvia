@@ -57,6 +57,10 @@ header .btn:hover{background:rgba(255,255,255,.25)}
 .spin{width:28px;height:28px;margin:0 auto 10px;border:3px solid var(--accbg);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .qc{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ships{margin-top:10px;display:grid;gap:6px}
+.ship{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:var(--soft);font-size:13px}
+.ship .tn{direction:ltr;unicode-bidi:isolate;font-weight:700;letter-spacing:.3px}
+.ship .sp{flex:1}
 .steps .btn.sure{background:var(--bad);border-color:var(--bad);color:#fff}
 .tbtn{background:#fff;color:var(--ink);border:0;border-radius:6px;padding:3px 10px;cursor:pointer;font-weight:700}
 .row{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;border-right:4px solid transparent;transition:background .12s}
@@ -220,7 +224,7 @@ th{color:var(--mute);font-weight:500;background:var(--soft)}tr:hover td{backgrou
     <div id="vCases" class="grid">
       <div class="card list">
         <div class="tools">
-          <input id="q" placeholder="🔍 חיפוש: שם / טלפון / 4 ספרות אחרונות / הזמנה">
+          <input id="q" placeholder="🔍 חיפוש: שם / טלפון / 4 ספרות אחרונות / הזמנה / מספר מעקב">
           <select id="fs"><option value="">כל הסטטוסים</option></select>
           <select id="srt" class="hide" title="מיון בתוך כל עמודה">
             <option value="">מיון: לפי תאריך המחלוקת</option><option value="old">מיון: הכי הרבה זמן בלי טיפול</option>
@@ -411,7 +415,7 @@ function hit(c, q){
   const qd = q.replace(/[\s\-()+]/g, ""), ph = String(c.phone || "");
   if (/^\d{4}$/.test(qd)) return ph.endsWith(qd) || String(c.orders_label || "").includes(qd);
   if (/^\d{5,}$/.test(qd) && (ph.includes(qd) || local(ph).includes(qd))) return true;
-  return [c.name, c.phone, local(c.phone), c.orders_label, c.email].join(" ").toLowerCase().includes(q);
+  return [c.name, c.phone, local(c.phone), c.orders_label, c.email, ...(c.orders || []).flatMap(o => (o.shipments || []).map(s => s.tracking))].join(" ").toLowerCase().includes(q);
 }
 // board: columns fill the screen height; sideways scrolling is the board's own scrollbar (shown on top by CSS)
 function board(keep){
@@ -507,13 +511,15 @@ function openCase(phone, keepScroll){
   const hit = si >= 0 ? { b: steps[si][2], st: steps[si][1], letter: si === 2, t: steps[si][0] } : ri >= 0 ? { b: replies[ri][1], st: "בתהליך", t: replies[ri][0] } : null;
   const nIdx = LIST.indexOf(phone), nxt = LIST.slice(nIdx + 1).concat(LIST.slice(0, Math.max(nIdx, 0))).find(p => p !== phone && (VIEW !== "queue" || next(CASES.find(x => x.phone === p) || {})));
   const cur = STATUSES.indexOf(c.status), tabs = [["msgs", "הודעות לפי הסדר", steps.length], ["replies", "תשובות לטענות", replies.length], ["orders", "הזמנות ומשלוחים", (c.orders || []).length], ["hist", "היסטוריה", ""]];
-  const scroll = $("#det").scrollTop;
+  const scroll = $("#det").scrollTop, ships = [...new Map((c.orders || []).flatMap(o => (o.shipments || []).map(s => [s.tracking, [o, s]]))).values()];   // one line per tracking number
   $("#det").innerHTML = `
     <div class="dhead">
       <button class="btn back" id="back">→ חזרה לרשימה</button>
       <h2>${esc(c.name)} ${chip(c)}</h2>
       <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${esc(c.email)}</span></div>
       <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}</div>
+      ${ships.length ? `<div class="ships">${ships.map(([o, s]) => `<div class="ship">📦 <span>${esc(o.order)} · ${esc(s.carrier)}</span><span class="tn">${esc(s.tracking)}</span><b>${esc(s.status)}</b>${s.date ? `<span class="mute">${esc(s.date)}</span>` : ""}<span class="sp"></span>
+        <button class="btn sm" data-copy="${esc(s.tracking)}">📋 העתק מספר מעקב</button>${s.tracking_url ? `<a class="btn sm" href="${esc(s.tracking_url)}" target="_blank">🔎 מעקב ב-17track</a>` : ""}</div>`).join("")}</div>` : ""}
     </div>
     <div class="dbody">
     ${todo ? `<div class="nextc ${urg(c) === "hot" ? "hot" : ""}">
@@ -543,7 +549,7 @@ function openCase(phone, keepScroll){
 
     <div class="pane" data-pane="orders">
     ${(c.orders || []).map(o => `<div class="order"><b>${esc(o.order)}</b> · ${esc(o.order_date)} · ${esc(o.amount)}<br><span class="mute">${esc(o.products)}</span>
-      ${o.shipments.map(s => `<br>${esc(s.carrier)} ${esc(s.tracking)} · <b>${esc(s.status)}</b>${s.date ? " · " + esc(s.date) : ""} · <a href="${s.tracking_url}" target="_blank">מעקב</a>`).join("")}</div>`).join("")}
+      ${o.shipments.map(s => `<br>${esc(s.carrier)} ${esc(s.tracking)} · <b>${esc(s.status)}</b>${s.date ? " · " + esc(s.date) : ""} · <a href="${esc(s.tracking_url)}" target="_blank">מעקב ב-17track</a>`).join("")}</div>`).join("")}
     <div class="mute" style="font-size:13px">📍 ${esc(c.address || "")}</div>
     </div>
 
