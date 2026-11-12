@@ -1,5 +1,5 @@
 // CMS · shared server code for the Edge Functions.
-// The rules and the texts are the SAME files the dashboard uses (send.js, templates.js), copied here by build_real.py.
+// The rules and the texts are send.js + templates.js next to this file (the same code is copied into index.html by supabase/sync_index.py).
 import "./templates.js";
 import "./send.js";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
