@@ -1,4 +1,5 @@
-// COPY of cms/send.js, written by build_real.py. Do not edit here: edit the CMS project's send.js and run build_real.py.
+// Smiley CMS · send.js: THE source of the email/SMS send rules. Used by the Edge Functions and the demo (cms-demo/).
+// After editing, run:  python supabase/sync_index.py   (copies it into index.html, which must stay one file).
 // CMS · the send rules. This is the logic the Supabase Edge Function will run (here it runs in the mock).
 // plan(c, stage, ctx) decides IF a stage may go out, to which channels, with which deadline and texts.
 // Nothing is sent from here: the caller (fake server now, Edge Function later) does the sending.

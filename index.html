@@ -7,8 +7,10 @@
 <title>Smiley · מחלקת גבייה</title>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<!-- CMS: email/SMS texts + send rules. Same files run on the server (Edge Function cms-send). Edit them in the CMS project, then build_real.py -->
+<!-- CMS: email/SMS texts + send rules, copied from supabase/functions/_shared/ by supabase/sync_index.py. Do not edit here. -->
 <script>
+// Smiley CMS · templates.js: THE source of the email/SMS texts. Used by the Edge Functions and the demo (cms-demo/).
+// After editing, run:  python supabase/sync_index.py   (copies it into index.html, which must stay one file).
 // CMS · Collection Messaging Service · message templates
 // ONE source for the email (HTML + plain text) and the SMS of every stage.
 // Pure functions, no page / DOM: the same file moves into the Supabase Edge Function later.
@@ -209,6 +211,8 @@
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
+// Smiley CMS · send.js: THE source of the email/SMS send rules. Used by the Edge Functions and the demo (cms-demo/).
+// After editing, run:  python supabase/sync_index.py   (copies it into index.html, which must stay one file).
 // CMS · the send rules. This is the logic the Supabase Edge Function will run (here it runs in the mock).
 // plan(c, stage, ctx) decides IF a stage may go out, to which channels, with which deadline and texts.
 // Nothing is sent from here: the caller (fake server now, Edge Function later) does the sending.

@@ -1,0 +1,1440 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>MOCK · Smiley · מחלקת גבייה</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap" rel="stylesheet">
+<!-- CMS MOCK: no Supabase library, no keys. Fake data + fake server only. -->
+<script src="mock-data.js"></script>
+<script src="../supabase/functions/_shared/templates.js"></script>
+<script src="../supabase/functions/_shared/send.js"></script>
+<script src="fake-sb.js"></script>
+<style>
+:root{--bg:#f3f4fa;--card:#fff;--ink:#1b1d2a;--mute:#6b7085;--line:#e4e6f0;--soft:#f7f8fc;
+  --acc:#4f46e5;--acc2:#7c3aed;--accbg:#eef0ff;--wa:#16a34a;
+  --ok:#15803d;--okbg:#dcfce7;--warn:#b45309;--warnbg:#fef3c7;--bad:#b91c1c;--badbg:#fee2e2;--new:#2563eb;--newbg:#dbeafe;
+  --r:14px;--sh:0 1px 2px rgba(20,22,40,.05),0 4px 14px rgba(20,22,40,.05)}
+*{box-sizing:border-box}
+body{margin:0;font-family:Heebo,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5}
+button,input,select,textarea{font:inherit}
+a{color:var(--acc)}
+.wrap{max-width:1320px;margin:0 auto;padding:0 16px 24px}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 -16px 16px;padding:14px 24px;
+  background:linear-gradient(110deg,var(--acc),var(--acc2));color:#fff;box-shadow:var(--sh)}
+header h1{font-size:19px;margin:0;font-weight:800;display:flex;align-items:center;gap:10px;white-space:nowrap}
+header h1 .logo{width:34px;height:34px;border-radius:10px;background:#fff;color:var(--acc);display:grid;place-items:center;font-size:20px}
+header .sp{flex:1}
+header #who{color:rgba(255,255,255,.85);font-size:13px}
+header .btn{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
+header .btn:hover{background:rgba(255,255,255,.25)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;background:rgba(255,255,255,.14);padding:4px;border-radius:999px}
+.tab{border:0;background:transparent;color:#fff;padding:7px 16px;border-radius:999px;cursor:pointer;font-weight:500}
+.tab:hover{background:rgba(255,255,255,.15)}
+.tab.on{background:#fff;color:var(--acc)}
+
+/* ---------- KPIs ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sh)}
+.kpi b{display:block;font-size:24px;font-weight:800;line-height:1.2}.kpi span{color:var(--mute);font-size:13px}
+.kpi.main{background:linear-gradient(135deg,#fff,var(--accbg));border-color:#d9dcfb}
+.pbar{height:8px;border-radius:99px;background:#e3e5f6;overflow:hidden;margin:8px 0 4px}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:99px;transition:width .4s}
+.kpi small{display:block;font-size:12px;color:var(--mute)}
+
+/* ---------- cases: list + panel ---------- */
+.grid{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.4fr);gap:16px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
+.list,#det{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+.list{padding:0}
+.tools{position:sticky;top:0;z-index:2;background:var(--card);display:flex;gap:8px;flex-wrap:wrap;padding:12px;border-bottom:1px solid var(--line)}
+.tools input,.tools select{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.tools input{flex:1;min-width:160px}
+.tools input:focus,.tools select:focus{outline:2px solid var(--accbg);border-color:var(--acc)}
+.lbar{width:100%;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}.lbar .sp{flex:1}
+#upd.bad{color:var(--bad);font-weight:700}
+.btn.sm{padding:4px 10px;font-size:13px;border-radius:8px}
+#rf.busy{opacity:.6;pointer-events:none}
+.spin{width:28px;height:28px;margin:0 auto 10px;border:3px solid var(--accbg);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.qc{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ships{margin-top:10px;display:grid;gap:6px}
+.ship{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:var(--soft);font-size:13px}
+.ship .tn{direction:ltr;unicode-bidi:isolate;font-weight:700;letter-spacing:.3px}
+.ship .sp{flex:1}
+.steps .btn.sure{background:var(--bad);border-color:var(--bad);color:#fff}
+.tbtn{background:#fff;color:var(--ink);border:0;border-radius:6px;padding:3px 10px;cursor:pointer;font-weight:700}
+.row{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;border-right:4px solid transparent;transition:background .12s}
+.row:hover{background:var(--soft)}.row.sel{background:var(--accbg)}
+.row.u-hot{border-right-color:var(--bad)}.row.u-due{border-right-color:#f59e0b}.row.u-new{border-right-color:var(--new)}
+.row.done{opacity:.55}.row.done .todo{color:var(--ok)}
+.row .n{flex:1;min-width:0}.row .n b{font-weight:700}.row .n small{display:block;color:var(--mute);font-size:13px}
+.row .todo{font-weight:500;color:var(--ink)!important}
+.row.u-hot .todo{color:var(--bad)!important}
+.row .side{display:flex;flex-direction:column;align-items:flex-start;gap:4px;flex-shrink:0}
+.age{font-size:12px;color:var(--mute)}
+.age.old{color:var(--bad);font-weight:700}
+.sec{padding:8px 14px;font-size:12px;font-weight:700;color:var(--mute);background:var(--soft);border-bottom:1px solid var(--line)}
+.ph{direction:ltr;unicode-bidi:isolate}
+.chip{font-size:12px;padding:2px 9px;border-radius:999px;background:#eef0f3;white-space:nowrap;font-weight:500}
+.chip.ok{background:var(--okbg);color:var(--ok)}.chip.warn{background:var(--warnbg);color:var(--warn)}.chip.bad{background:var(--badbg);color:var(--bad)}
+
+/* ---------- case panel ---------- */
+#det{padding:0}
+.dhead{position:sticky;top:0;z-index:2;background:var(--card);padding:16px 18px 12px;border-bottom:1px solid var(--line)}
+.dhead h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--mute);font-size:14px}
+.meta b{color:var(--ink);font-size:16px}
+.dbody{padding:16px 18px}
+.empty{padding:48px 18px;text-align:center;color:var(--mute)}
+.empty .big{font-size:40px}
+h2{font-size:20px;margin:0 0 4px;font-weight:800}h3{font-size:14px;margin:18px 0 8px;color:var(--mute);font-weight:700}
+.mute{color:var(--mute)}.btns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 14px;cursor:pointer;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center;gap:6px;font-weight:500;transition:transform .05s,background .12s}
+.btn:hover{background:var(--soft)}.btn:active{transform:translateY(1px)}
+.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}.btn.p:hover{background:#4338ca}
+.btn.g{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.wa{background:var(--wa);border-color:var(--wa);color:#fff}.btn.wa:hover{background:#15803d}
+.btn.big{padding:11px 20px;font-size:16px}
+.back{display:none}
+
+/* next step card */
+.nextc{border-radius:var(--r);padding:16px;background:linear-gradient(135deg,var(--accbg),#f5f0ff);border:1px solid #d9dcfb}
+.nextc.hot{background:linear-gradient(135deg,var(--badbg),#fff5f5);border-color:#fecaca}
+.nextc.calm{background:var(--okbg);border-color:#bbf7d0}
+.nextc .lbl{font-size:12px;font-weight:700;color:var(--mute);letter-spacing:.02em}
+.nextc .what{font-size:19px;font-weight:800;margin:2px 0 10px}
+.nextc pre{white-space:pre-wrap;font:inherit;font-size:14px;margin:0 0 12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-height:190px;overflow:auto}
+
+/* status step bar */
+.steps{display:flex;gap:0;flex-wrap:wrap;margin:0}
+.steps .btn{border-radius:0;margin-inline-start:-1px;padding:9px 12px;font-size:14px;background:#fff;color:var(--mute)}
+.steps .btn:first-child{border-radius:0 10px 10px 0;margin:0}.steps .btn:last-child{border-radius:10px 0 0 10px}
+.steps .btn.past{background:var(--soft);color:var(--ink)}
+.steps .btn.past::before{content:"✓";color:var(--ok);font-weight:700}
+.steps .btn.p{background:var(--acc);border-color:var(--acc);color:#fff;position:relative;z-index:1;box-shadow:0 2px 8px rgba(79,70,229,.35)}
+.hint{font-size:12px;color:var(--mute);margin-top:6px}.btns .hint,.msg .hint{width:100%}
+
+/* panel tabs */
+.ptabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:18px 0 12px;overflow-x:auto}
+.ptab{border:0;background:none;padding:9px 12px;cursor:pointer;color:var(--mute);font-weight:500;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.ptab.on{color:var(--acc);border-bottom-color:var(--acc)}
+.ptab .cnt{font-size:11px;background:var(--soft);border-radius:99px;padding:0 6px;margin-inline-start:4px}
+
+.order{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:14px;background:var(--soft)}
+.msg{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;background:#fff}
+.msg[open]{border-color:#c7cbf7;background:#fbfbff}
+.msg.hl{border-color:var(--acc);box-shadow:0 0 0 2px var(--accbg)}
+.msg pre{white-space:pre-wrap;font:inherit;margin:8px 0;font-size:14px}
+.msg summary{cursor:pointer;font-weight:500}
+.shot{display:block;max-width:220px;border:1px solid var(--line);border-radius:8px;margin:8px 0;cursor:zoom-in}
+.ev{font-size:13px;border-right:3px solid var(--line);padding:6px 12px;margin:8px 0;white-space:pre-wrap;background:var(--soft);border-radius:8px 0 0 8px}
+.ev.pay{border-color:var(--ok);background:var(--okbg)}
+
+/* all cases: board, one column per status */
+#vCases.board{grid-template-columns:minmax(0,1fr)}
+#vCases.board .list{position:static;max-height:none;overflow:hidden;min-width:0}
+body.wide{overflow-x:hidden}
+#vCases.board .tools{position:static}
+body.wide .wrap{max-width:none}
+.kbox{margin:12px;border:1px solid var(--line);border-radius:12px;background:#fbfbfe;overflow:hidden;min-width:0;max-width:100%}
+/* the board's own scrollbar, flipped to sit on top of the columns (no fake bar to keep in sync) */
+.kb{max-width:100%;overflow-x:auto;overflow-y:hidden;transform:rotateX(180deg);scrollbar-width:thin;scrollbar-color:#b9bdf0 #eceef7}
+.kb::-webkit-scrollbar{height:8px}.kb::-webkit-scrollbar-track{background:#eceef7;border-radius:99px;margin:0 12px}
+.kb::-webkit-scrollbar-thumb{background:#b9bdf0;border-radius:99px}.kb::-webkit-scrollbar-thumb:hover{background:var(--acc)}
+.kbin{display:grid;grid-template-columns:repeat(var(--n,6),minmax(260px,1fr));gap:12px;padding:10px 12px 12px;align-items:start;transform:rotateX(180deg)}
+.col{background:var(--soft);border:1px solid var(--line);border-top:4px solid var(--c,#cbd5e1);border-radius:12px;display:flex;flex-direction:column;height:var(--h,calc(100vh - 290px));min-height:300px}
+.colh{padding:10px 12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);background:#fff;border-radius:8px 8px 0 0}
+.colh b{font-size:15px}.colh .cnt{font-size:12px;background:var(--soft);border-radius:99px;padding:0 8px;font-weight:700}
+.colh small{width:100%;color:var(--mute);font-size:12px}
+.colx{margin-inline-start:auto;border:0;background:none;cursor:pointer;color:var(--mute);font-size:15px;padding:0 4px;border-radius:6px}.colx:hover{background:var(--soft);color:var(--ink)}
+.col.min{cursor:pointer;align-items:center;padding:12px 0;gap:10px}.col.min:hover{background:#fff}
+.col.min b{writing-mode:vertical-rl;font-size:14px}.col.min .cnt{font-size:12px;background:#fff;border-radius:99px;padding:0 7px;font-weight:700}
+.colb{overflow-y:auto;padding:8px;flex:1}
+.colb .empty{padding:24px 8px;font-size:13px}
+.col .row{background:#fff;border:1px solid var(--line);border-right-width:4px;border-radius:10px;margin-bottom:8px;flex-wrap:wrap;padding:10px 12px;box-shadow:0 1px 2px rgba(20,22,40,.04)}
+.col .row:hover{box-shadow:0 4px 12px rgba(20,22,40,.08)}
+.col .row.sel{background:var(--accbg);border-color:var(--acc)}
+.col .row{display:block;overflow:hidden}
+.col .row .n{width:100%;min-width:0}
+.col .row .n b,.col .row .n small{overflow-wrap:anywhere;word-break:break-word}
+.col .row .n b{display:block;line-height:1.3}
+.col .row .side{flex-direction:row;flex-wrap:wrap;width:100%;align-items:center;justify-content:space-between;gap:4px 8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.col .row .side>*{min-width:0;overflow-wrap:anywhere}
+.col .row .chip{white-space:normal}
+.col .row .chip{display:none}.col .row .chip.bad,.col .row .chip.warn{display:inline}
+#vCases.board #det{position:fixed;top:0;left:0;bottom:0;width:min(660px,100%);max-height:none;z-index:20;border-radius:0;border:0;box-shadow:8px 0 40px rgba(20,22,40,.25)}
+#vCases.board:not(.open) #det,#vCases:not(.board) .shade,#vCases.board:not(.open) .shade{display:none}
+.shade{position:fixed;inset:0;background:rgba(20,22,40,.35);z-index:19}
+#vCases.board .back{display:inline-flex}
+
+/* payroll */
+#vPay{padding:20px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:right;padding:10px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--mute);font-weight:500;background:var(--soft)}tr:hover td{background:#fbfbfe}
+
+/* login */
+.login{max-width:380px;margin:14vh auto;padding:28px;text-align:center}
+.login .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 12px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;display:grid;place-items:center;font-size:30px}
+.login input{width:100%;padding:11px 12px;margin:6px 0;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.toast{position:fixed;bottom:18px;left:18px;background:var(--ink);color:#fff;padding:11px 16px;border-radius:10px;display:none;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.2);z-index:9}
+.banner{background:var(--warnbg);border-color:#fcd34d;margin-bottom:12px}
+.hide{display:none!important}
+
+/* phone: list and case are two screens */
+@media(max-width:860px){
+  .grid{grid-template-columns:1fr}
+  .list,#det{position:static;max-height:none}
+  #vCases.open .list{display:none}
+  #vCases:not(.open) #det{display:none}
+  .back{display:inline-flex;margin-bottom:8px}
+  header{padding:12px 16px}header .sp{display:none}
+  .tabs{order:5;width:100%;justify-content:space-between}.tab{flex:1;padding:7px 8px}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:10px 12px}.kpi b{font-size:19px}
+  .steps .btn{flex:1 1 45%;border-radius:10px!important;margin:3px!important}
+  .btn.big{width:100%;justify-content:center}
+}
+/* ---------- CMS mock: banner, send button, send window, messages log ---------- */
+.mockbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fef3c7;border-bottom:1px solid #fcd34d;color:#78350f;padding:8px 16px;font-size:13px}
+.mockbar .sp{flex:1}.mockbar label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.btn.send{background:linear-gradient(110deg,var(--acc),var(--acc2));border-color:var(--acc);color:#fff}
+.btn.send:hover{filter:brightness(1.08)}
+.smodal{position:fixed;inset:0;background:rgba(20,22,40,.45);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}
+.sbox{width:min(980px,100%);padding:0;overflow:hidden}
+.sbox .sh{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.sbox .sh h3{margin:0;font-size:17px}.sbox .sh .sp{flex:1}
+.sbox .sg{display:grid;grid-template-columns:300px 1fr;gap:0}
+.sbox .sl{padding:16px 18px;border-inline-end:1px solid var(--line);background:var(--soft);font-size:14px}
+.sbox .sl h4{margin:14px 0 6px;font-size:13px;color:var(--mute)}.sbox .sl h4:first-child{margin-top:0}
+.sbox .bub{background:#fff;border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:10px 12px;white-space:pre-wrap;word-break:break-word;line-height:1.5}
+.sbox .chk{margin:0;padding:0;list-style:none}.sbox .chk li{padding:4px 0}
+.sbox .er{color:var(--bad)}.sbox .wn{color:var(--warn)}.sbox .okk{color:var(--ok)}
+.sbox .mh{padding:10px 16px;border-bottom:1px solid var(--line);font-size:14px;display:grid;gap:2px}
+.sbox .mh .s{font-weight:700;font-size:16px}
+.sbox iframe{width:100%;height:62vh;border:0;display:block;background:#f4f5f8}
+.sbox .sf{display:flex;gap:10px;align-items:center;padding:12px 18px;border-top:1px solid var(--line)}
+.sbox .att{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12px;background:#fff;width:max-content}
+.mlog{display:grid;gap:6px;margin-bottom:14px}
+.mlog .m{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mlog .m .st{margin-inline-start:auto}
+/* email/SMS case drawer (its own panel, apart from the WhatsApp one) */
+.tabs.em{background:rgba(255,255,255,.22);border:1px dashed rgba(255,255,255,.55)}
+.ep{position:fixed;inset:0;z-index:40}.ep .eps{position:absolute;inset:0;background:rgba(20,22,40,.35)}
+.ep .epp{position:absolute;top:0;bottom:0;right:0;width:min(620px,100%);overflow-y:auto;border-radius:0;padding:0;box-shadow:-8px 0 30px rgba(20,22,40,.18)}
+.ep .dhead{position:sticky;top:0;background:#fff;z-index:1;padding:14px 18px;border-bottom:1px solid var(--line)}
+.ep .dhead #epx{float:left}.ep .dbody{padding:14px 18px 30px}
+.wahint{margin-top:8px;font-size:13px;color:var(--mute);background:var(--soft);border-radius:8px;padding:5px 10px;display:inline-block}
+.stg{display:grid;gap:6px}
+.sr{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+.sr>b{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--soft);flex:none}
+.sr.done>b{background:var(--okbg);color:var(--ok)}.sr.nx{border-color:var(--acc);box-shadow:0 0 0 2px var(--accbg)}.sr.nx>b{background:var(--acc);color:#fff}
+.sr .sx{flex:1;min-width:0}.sr .sx .mute{font-size:12px}
+/* summary tab */
+.sumh{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.sumh h2{margin:0;font-size:20px}.sumh .sp{flex:1}
+.sumh .seg{display:flex;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px;gap:2px}
+.sumh .seg button{border:0;background:none;padding:6px 16px;border-radius:999px;cursor:pointer;color:var(--mute);font-weight:500}
+.sumh .seg button.on{background:var(--acc);color:#fff}
+.kpis.sk{grid-template-columns:repeat(6,1fr)}
+.kpi small.up{color:var(--ok)}.kpi small.dn{color:var(--bad)}
+.sg2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.sc{padding:14px 16px;min-width:0}.sch{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}.sch h3{margin:0;font-size:15px;flex:1}
+.lg{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--mute)}.lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.ch{display:flex;gap:8px;height:190px;direction:ltr}
+.chy{display:flex;flex-direction:column;justify-content:space-between;font-size:11px;color:var(--mute);padding-bottom:18px;text-align:right;min-width:34px}
+.chp{flex:1;position:relative;display:flex;align-items:stretch;gap:2px;border-bottom:1px solid var(--line);padding-bottom:0;min-width:0;flex-direction:row-reverse}
+.chp .gl{position:absolute;left:0;right:0;border-top:1px dashed #eceef5;height:0}
+.cc{flex:1;display:flex;flex-direction:column;justify-content:flex-end;position:relative;min-width:0;cursor:default}
+.cc:hover{background:rgba(79,70,229,.05)}
+.cb{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:2px}
+.cb i{display:block;width:min(12px,40%);border-radius:4px 4px 0 0}
+.cx{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--mute);white-space:nowrap}
+.ch{margin-bottom:20px}
+.ctip{position:fixed;display:none;z-index:60;background:#1b1d2a;color:#fff;font-size:12px;border-radius:8px;padding:7px 10px;pointer-events:none;line-height:1.6;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+.hb{display:grid;grid-template-columns:150px 1fr 36px;align-items:center;gap:10px;padding:5px 0;font-size:13px}
+.hb .ht{height:10px;background:var(--soft);border-radius:99px;overflow:hidden}.hb .ht i{display:block;height:100%;border-radius:99px}
+.hb b{text-align:left}
+.due2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.due2>div{display:grid;gap:6px;align-content:start}
+.due2 .big{font-size:26px;line-height:1}
+.dl{display:grid;text-align:right;border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px}
+.dl:hover{border-color:var(--acc)}.dl span{color:var(--mute);font-size:12px}
+.feed{max-height:340px;overflow-y:auto;display:grid;gap:2px}
+.fi{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--soft);font-size:13px;cursor:pointer}
+.fi:hover{background:var(--soft)}.fi .fic{font-size:15px}
+@media (max-width:860px){.kpis.sk{grid-template-columns:1fr 1fr}.sg2{grid-template-columns:1fr}.due2{grid-template-columns:1fr}.hb{grid-template-columns:110px 1fr 30px}}
+/* tracking tab */
+.kpis.tk{grid-template-columns:repeat(5,1fr)}
+button.kpi{font:inherit;text-align:inherit;cursor:pointer;color:inherit}button.kpi:hover{border-color:var(--acc)}
+.kpi small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.kpi.bad{background:var(--badbg);border-color:#fca5a5}.kpi.bad b{color:var(--bad)}
+.tbox{margin-bottom:16px;overflow:hidden}
+.th{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
+.th h3{margin:0;font-size:16px}.th input,.th select{padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.th input{flex:1;min-width:180px}
+.tp{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:10px;padding:12px;overflow-x:auto}
+.tcol{background:var(--soft);border-radius:12px;display:flex;flex-direction:column;min-width:0}
+.tch{display:flex;align-items:center;gap:6px;padding:10px 12px;font-size:14px;border-bottom:1px solid var(--line)}
+.tch .cnt{background:#fff;border:1px solid var(--line);border-radius:99px;padding:0 8px;font-size:12px}
+.tcb{padding:8px;display:grid;gap:8px;max-height:56vh;overflow-y:auto;align-content:start}
+.tc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 11px;cursor:pointer;font-size:13px;display:grid;gap:3px;border-inline-start:4px solid var(--line)}
+.tc:hover{border-color:var(--acc)}
+.tc.due{border-inline-start-color:var(--bad)}.tc.fl{background:#fff7f7}
+.tc .tt{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.tc .tn{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:3px;font-weight:500;flex-wrap:wrap}
+.tc .tn .btn{white-space:nowrap;padding:3px 10px}
+.okk{color:var(--ok);font-weight:700}.er{color:var(--bad)}.wn{color:var(--warn)}
+#tlog tr[data-open]{cursor:pointer}#tlog tr[data-open]:hover td{background:var(--soft)}#tlog tr.flr td{background:#fff7f7}
+@media (max-width:860px){.kpis.tk{grid-template-columns:1fr 1fr}}
+@media (max-width:860px){.sbox .sg{grid-template-columns:1fr}.sbox .sl{border:0;border-bottom:1px solid var(--line)}}
+/* customers tab */
+.cq{flex:1;min-width:220px;max-width:380px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.cl{overflow:visible}
+.cu1{display:grid;grid-template-columns:56px minmax(150px,1.3fr) 120px minmax(150px,1.4fr) 110px 120px;gap:12px;align-items:center;padding:10px 16px;cursor:pointer}
+.cu{border-bottom:1px solid var(--soft)}.cu:hover{background:#fafbff}.cu.op{background:var(--accbg)}
+.cuh{position:sticky;top:50px;z-index:2;background:#fff;border-bottom:1px solid var(--line)}
+.cuh .cu1{cursor:default;font-size:12px;color:var(--mute);font-weight:700;padding:8px 16px}
+.cu .ct{font-size:13px;color:var(--mute)}.cu .cn{display:grid;min-width:0}.cu .cn b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cu .cn .mute{font-size:12px}
+.cu .cph{font-size:14px;text-align:right}.cu .cem{font-size:13px;color:#33364a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cu .cor{font-size:13px}.cu .cam{text-align:left;font-size:15px;font-weight:800}
+.cu2{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;padding:4px 16px 14px 16px;font-size:14px}
+.cu2 .k{display:block;font-size:12px;color:var(--mute)}.cu2 .qc,.cu2 .order,.cu2 .tl2{grid-column:1/-1}
+.tl2{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.tlh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.tlh .sp{flex:1}
+.tlst{font-size:12px;background:#ecfdf3;color:#15803d;border-radius:99px;padding:2px 10px}.tlst.em{background:var(--accbg);color:var(--acc)}
+.tlf{display:flex;background:var(--soft);border-radius:99px;padding:3px;gap:2px}
+.tlf button{border:0;background:none;border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--mute)}.tlf button.on{background:#fff;color:var(--ink);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tli{display:grid;gap:6px;max-height:340px;overflow-y:auto}
+.ti{display:grid;grid-template-columns:118px 1fr auto;gap:10px;align-items:start;padding:8px 10px;border-radius:10px;border-inline-start:4px solid var(--line);background:var(--soft);font-size:13px}
+.ti .tg{font-size:12px;font-weight:700}
+.ti.wa{border-inline-start-color:#16a34a;background:#f3fcf6}.ti.wa .tg{color:#15803d}
+.ti.em{border-inline-start-color:var(--acc);background:#f6f6ff}.ti.em .tg{color:var(--acc)}
+.ti.pay{border-inline-start-color:#0d9488;background:#f0fdfa}.ti.pay .tg{color:#0f766e}
+.ti.bad{border-inline-start-color:var(--bad);background:#fff5f5}
+@media (max-width:860px){.ti{grid-template-columns:1fr}}
+.dg .dh{display:flex;align-items:center;gap:10px;padding:10px 16px;background:linear-gradient(90deg,#fff,var(--soft));border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
+.dg .dh b{font-size:15px}.dg .dh .mute{font-weight:400}
+.dg .dh .dc{font-size:12px;background:var(--accbg);color:var(--acc);border-radius:99px;padding:2px 10px;font-weight:700}
+.dg .dh .ds{font-size:13px;font-weight:800;min-width:70px;text-align:left}
+@media (max-width:860px){.cu1{grid-template-columns:44px 1fr auto;gap:8px}.cu .cph,.cu .cem,.cu .cor,.cuh{display:none}.cu2{grid-template-columns:1fr}}
+/* ================= top bar: brand row + grouped, sticky navigation ================= */
+header{margin-bottom:0;padding:12px 24px;border-radius:0}
+header .hpill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);color:#fff;text-decoration:none;font-size:13px;padding:6px 12px;border-radius:999px}
+header .hpill:hover{background:rgba(255,255,255,.24)}
+header .user{display:inline-flex;align-items:center;gap:8px;background:rgba(0,0,0,.12);border-radius:999px;padding:4px 12px 4px 4px}
+header .user .av{width:26px;height:26px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:14px}
+header .user #who{color:#fff}
+header .user .btn{padding:3px 10px;font-size:12px}
+.nav{position:sticky;top:0;z-index:30;display:flex;align-items:flex-end;gap:6px;margin:0 -16px 16px;padding:6px 20px 0;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 4px 14px rgba(20,22,40,.05);overflow-x:auto;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav .ng{display:flex;flex-direction:column;gap:2px;padding:0 8px;border-inline-start:1px solid var(--line)}
+.nav .ng:first-child{border:0;padding-inline-start:0}
+.nav .nl{font-size:11px;color:var(--mute);font-weight:700;letter-spacing:.2px;padding:0 6px;white-space:nowrap}
+.nav .nb{display:flex;gap:2px}
+.nav .tab{color:var(--mute);background:none;border-radius:10px 10px 0 0;padding:9px 16px 11px;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap;box-shadow:none!important}
+.nav .tab:hover{background:var(--soft);color:var(--ink)}
+.nav .tab.on{color:var(--acc);background:var(--accbg);border-bottom-color:var(--acc)}
+.nav .ng.wa .tab.on{color:#15803d;background:#ecfdf3;border-bottom-color:#16a34a}
+.nav .ng.em .tab.on{color:var(--acc);background:var(--accbg);border-bottom-color:var(--acc)}
+@media (max-width:860px){header .sp{display:block}.nav{padding:6px 10px 0}.nav .nl{display:none}.nav .ng{padding:0 4px}.nav .tab{padding:8px 12px 10px}header .user #who{display:none}}
+/* ================= visual upgrade: easier to read at a glance (colors, contrast, numbers). No text or layout changes. ================= */
+body{font-variant-numeric:tabular-nums}
+/* status chips: one color per status, everywhere, with a dot */
+.chip.st{background:color-mix(in srgb,var(--sc) 13%,#fff);color:color-mix(in srgb,var(--sc) 82%,#000);border:1px solid color-mix(in srgb,var(--sc) 30%,#fff);font-weight:700;display:inline-flex;align-items:center;gap:5px}
+.chip.st::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--sc);flex:none}
+.col .row .chip.st{display:none}
+/* current status in the status bar = its own color */
+.steps .btn.p{background:var(--sc,var(--acc))!important;border-color:var(--sc,var(--acc))!important;box-shadow:0 3px 10px color-mix(in srgb,var(--sc,var(--acc)) 35%,transparent)}
+/* KPI cards: bigger numbers, colored accent line */
+.kpi{position:relative;overflow:hidden;transition:transform .12s,box-shadow .12s}
+.kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,var(--acc),var(--acc2));opacity:.55}
+.kpi.main::before{opacity:1;height:4px}
+.kpi b{font-size:27px;letter-spacing:-.5px}
+.kpi.bad::before{background:var(--bad);opacity:1}
+button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,.08)}
+/* case rows: urgency is a color you see before you read */
+.row{border-right-width:5px}
+.row.u-hot{background:linear-gradient(270deg,#fff1f1,#fff 45%)}
+.row.u-due{background:linear-gradient(270deg,#fffaeb,#fff 45%)}
+.row.u-new{background:linear-gradient(270deg,#eff5ff,#fff 45%)}
+.row.sel{background:var(--accbg)!important}
+.row .side>b{font-size:15px!important;font-weight:800}
+.age{background:var(--soft);border-radius:99px;padding:1px 8px}
+.age.old{background:var(--badbg)}
+.row .todo{display:inline-block}
+.row.u-hot .todo{font-weight:700}
+/* board columns: tinted headers */
+.colh{background:linear-gradient(180deg,color-mix(in srgb,var(--c) 9%,#fff),#fff)}
+.colh .cnt{background:var(--c);color:#fff}
+/* next-step card stands out more */
+.nextc .what{font-size:19px}
+.nextc.hot{border-width:2px}
+/* tracking cards: one color per state */
+.tc{transition:box-shadow .12s,transform .12s}
+.tc:hover{box-shadow:0 4px 12px rgba(20,22,40,.08);transform:translateY(-1px)}
+.tc.due{border-inline-start-color:var(--bad);background:linear-gradient(270deg,#fff1f1,#fff 50%)}
+.tc.sched{border-inline-start-color:#93c5fd}
+.tc.talk{border-inline-start-color:#f59e0b;background:linear-gradient(270deg,#fffaeb,#fff 50%)}
+.tc.blk{border-inline-start-color:#c4b5fd}
+.tc.auto{border-inline-start-color:var(--acc)}
+.phl{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0 1px}
+.phl span{font-size:11.5px;border-radius:99px;padding:1px 8px;font-weight:700}
+.phl .ph1{background:var(--ink);color:#fff}.phl .ph2{background:var(--accbg);color:var(--acc)}
+.dhead .phl{margin-top:8px}.dhead .phl span{font-size:13px;padding:3px 10px}
+.tc .tn.au{color:var(--acc);font-size:12px}
+.chip.au{background:var(--accbg);color:var(--acc);font-weight:700}
+.nextc.auto{background:linear-gradient(135deg,var(--accbg),#fff);border-color:#c7d2fe}
+.tc.fin{border-inline-start-color:#86efac}
+.tc .tt b:last-child{font-weight:800}
+.tc .tl{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;font-size:12px}
+.tch{background:#fff;border-radius:12px 12px 0 0}
+.tch .chip.bad{font-weight:700}
+/* delivery marks as small colored badges */
+.okk,.er,.wn{font-weight:800}
+.tl .okk,.sr .okk,#tlog .okk,.mlog .okk{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--okbg);font-size:11px}
+.tl .er,.sr .er,#tlog td>.er:first-child{display:inline-grid;place-items:center;min-width:17px;height:17px;border-radius:50%;background:var(--badbg);font-size:11px}
+/* email drawer: the 4 stages read as a progress rail */
+.sr.done{background:linear-gradient(270deg,#f0fdf4,#fff 60%);border-color:#bbf7d0}
+.sr.nx{background:linear-gradient(270deg,var(--accbg),#fff 60%)}
+/* history / feed: easier scanning */
+.ev{border-right:3px solid var(--line)}
+.fi:nth-child(odd){background:#fcfcfe}
+/* summary horizontal bars: thicker */
+.hb .ht{height:12px}
+.hb b{font-size:14px}
+/* tabs in the header: clearer active tab */
+.tab.on{box-shadow:0 2px 8px rgba(0,0,0,.12);font-weight:700}
+/* ================= fit to screen: PC + phone ================= */
+html,body{max-width:100%;overflow-x:hidden}
+/* every tab uses the same full screen width (before: WhatsApp was full width, the rest boxed in the middle, so the page jumped) */
+.wrap,body.wide .wrap{max-width:none;padding:0 20px 24px}
+header,.nav{margin-left:-20px;margin-right:-20px}
+html{scrollbar-gutter:stable}
+img,iframe,svg{max-width:100%}
+.mockbar{padding:6px 16px;gap:8px}.mockbar .mtt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* laptop (≤1366): a bit tighter so more fits above the fold */
+@media (max-width:1400px){.kpi{padding:12px 14px}.kpi b{font-size:24px}header{padding:10px 20px}}
+/* tablet */
+@media (max-width:1100px){.kpis.sk{grid-template-columns:repeat(3,1fr)}.kpis.tk{grid-template-columns:repeat(3,1fr)}.cu1{grid-template-columns:50px minmax(130px,1.3fr) 110px minmax(120px,1.2fr) 100px}.cu .cor{display:none}.cuh .cor{display:none}}
+/* phone */
+@media (max-width:860px){
+  body{font-size:14px;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  .wrap{padding:0 10px 16px}
+  /* mock bar: one short line, buttons swipe sideways */
+  .mockbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:5px 10px;font-size:12px}
+  .mockbar::-webkit-scrollbar{display:none}.mockbar .mtx{display:none}.mockbar .sp{display:none}
+  .mockbar>*{flex:none}.mockbar .btn.sm{padding:4px 9px;font-size:12px;min-height:30px}
+  /* header: one compact row */
+  header{margin:0 -10px 10px;padding:8px 12px;gap:8px;flex-wrap:nowrap}
+  header h1{font-size:15px;gap:7px;flex:none}
+  header h1 .logo{width:28px;height:28px;font-size:16px;border-radius:8px}
+  header .user{display:none}
+  header .hpill{font-size:11px;padding:4px 9px;min-width:0;flex:0 1 auto;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:block}
+  header .sp{display:block;flex:1 1 0;min-width:0}
+  header>.btn{padding:5px 10px;font-size:13px;flex:none}
+  /* tabs: an app-style bar at the bottom, in thumb reach, all 5 always visible */
+  .nav{position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);gap:2px;border-top:1px solid var(--line);border-bottom:0;box-shadow:0 -4px 16px rgba(20,22,40,.08);overflow:visible;z-index:35}
+  .nav .ng,.nav .ng:first-child{display:contents}.nav .nb{display:contents}
+  .nav .tab{white-space:normal;text-align:center;line-height:1.25;font-size:11.5px;padding:7px 2px;min-height:52px;border-radius:10px;border-bottom:0;display:flex;align-items:center;justify-content:center}
+  .nav .tab.on{border-bottom:0}
+  .toast{bottom:calc(76px + env(safe-area-inset-bottom));left:10px;right:10px}
+  /* cards and numbers */
+  .kpis.sk,.kpis.tk{grid-template-columns:1fr 1fr}
+  .card{padding:12px}.kpis{gap:8px;margin-bottom:12px}.kpi{padding:10px 12px}.kpi b{font-size:21px}.kpi span{font-size:12px}
+  .sumh{gap:8px}.sumh h2{font-size:18px}.sumh .seg{width:100%}.sumh .seg button{flex:1;padding:8px 6px}
+  .cq{min-width:0;max-width:none;width:100%;flex-basis:100%}
+  .sc{padding:12px}.ch{height:160px}
+  .hb{grid-template-columns:96px 1fr 30px;gap:8px}
+  /* comfortable touch targets, no iOS zoom on inputs */
+  .btn{min-height:38px}.btn.sm{min-height:32px}
+  input,select,textarea{font-size:16px!important}
+  .th{padding:10px 12px}.th input{min-width:0;width:100%;flex-basis:100%}
+  /* email/SMS stage columns: swipe one column at a time */
+  .tp{grid-template-columns:repeat(5,82%);scroll-snap-type:x mandatory;padding:10px}.tcol{scroll-snap-align:start}
+  .tcb{max-height:none}
+  /* WhatsApp board: columns swipe, height fits the phone */
+  .kbin{grid-template-columns:repeat(var(--n,6),82vw);scroll-snap-type:x mandatory}.col{scroll-snap-align:start;height:auto;max-height:70vh}
+  .kbox{margin:8px}
+  .tools{padding:10px}.tools input{flex-basis:100%}.tools select{flex:1 1 40%;min-width:0}
+  #vCases.board #det{width:100%;box-shadow:none;bottom:calc(60px + env(safe-area-inset-bottom))}
+  .dg .dh .ds{min-width:0}
+  /* drawers and the send window: full screen */
+  .ep .epp{width:100%}.ep .dhead{padding:12px 14px}.ep .dbody{padding:12px 14px 30px}
+  .smodal{padding:0}.sbox{border-radius:0;min-height:100%;overflow:visible}.sbox .sh{padding:12px 14px}.sbox .sl{padding:12px 14px}
+  .sbox .sf{flex-wrap:wrap;padding:10px 14px calc(10px + env(safe-area-inset-bottom));position:sticky;bottom:0;background:#fff;z-index:2;box-shadow:0 -4px 14px rgba(20,22,40,.08)}.sbox iframe{height:60vh}
+  .sbox .sh{position:sticky;top:0;background:#fff;z-index:2}
+  .sr{flex-wrap:wrap}
+  .ti{gap:4px}
+  #vPay{padding:12px}
+  table{font-size:13px}th,td{padding:8px 6px}
+  .cu1{padding:10px 12px}.cu2{padding:4px 12px 12px}
+  .dg .dh{padding:8px 12px;flex-wrap:wrap}
+}
+@media (max-width:380px){.kpis.sk,.kpis.tk,.kpis{grid-template-columns:1fr 1fr}.kpi b{font-size:19px}header h1{font-size:14px}}
+</style>
+</head>
+<body>
+<div class="mockbar"><span class="mtt">🧪 <b>מצב הדגמה (MOCK)</b><span class="mtx"> · נתונים מדומים בלבד · לא מחובר ל-Supabase · שום מייל או SMS לא נשלח באמת</span></span>
+  <span class="sp"></span>
+  <label><input type="checkbox" id="mq"> להתעלם מחלון השליחה (לבדיקה)</label>
+  <button class="btn sm" id="mrun" title="מריץ עכשיו את המתזמן ששולח שלבים 2–4">⏱ הרץ מתזמן</button>
+  <button class="btn sm" id="mskip" title="מזיז את כל הדמו יום אחד קדימה ומריץ את המתזמן">⏩ דלג יום</button>
+  <a class="btn sm" href="preview.html" target="_blank">תצוגת תבניות</a>
+  <a class="btn sm" href="connections.html" target="_blank">חיבורים</a>
+  <button class="btn sm" id="mreset">איפוס נתוני הדמו</button>
+</div>
+<div class="wrap">
+  <div id="login" class="login card hide">
+    <div class="logo">☺</div>
+    <h2>מחלקת גבייה · Smiley</h2>
+    <p class="mute" style="margin:0 0 10px">כניסה לחשבון העובד</p>
+    <input id="em" type="email" placeholder="אימייל" autocomplete="username">
+    <input id="pw" type="password" placeholder="סיסמה" autocomplete="current-password">
+    <button class="btn p big" id="go" style="width:100%;justify-content:center;margin-top:8px">כניסה</button>
+    <p id="lerr" class="mute"></p>
+  </div>
+
+  <div id="app" class="hide">
+    <header>
+      <h1><span class="logo">☺</span>מחלקת גבייה · Smiley</h1>
+      <span class="sp"></span>
+      <a class="hpill" id="conn" href="#" title="מצב החיבור למערכות המייל וה-SMS: ללחוץ לפרטים">● בודק חיבור…</a>
+      <span class="user"><span class="av">👤</span><span id="who"></span></span>
+      <button class="btn" id="out">יציאה</button>
+    </header>
+    <nav class="nav" id="nav">
+      <div class="ng"><div class="nb">
+        <button class="tab on" data-v="sum">📊 סיכום</button><button class="tab" data-v="cust">👥 לקוחות</button></div></div>
+      <div class="ng wa"><div class="nb">
+        <button class="tab" data-v="all">💬 וואטסאפ</button></div></div>
+      <div class="ng em"><div class="nb">
+        <button class="tab" data-v="track">📧 מייל / SMS</button></div></div>
+      <div class="ng"><div class="nb">
+        <button class="tab" data-v="pay">עמלות ושכר</button></div></div>
+    </nav>
+    <div id="banner" class="card banner hide">מצב עובד: זה מה שהעובד רואה. שינויים שתעשה כאן נשמרים בתיקים, אבל לא נספרים לו לעמלה.</div>
+    <div class="kpis" id="kpis"><div class="kpi"><b class="mute">…</b><span>טוען…</span></div></div>
+
+    <div id="vCases" class="grid">
+      <div class="card list">
+        <div class="tools">
+          <input id="q" placeholder="🔍 חיפוש: שם / טלפון / 4 ספרות אחרונות / הזמנה / מספר מעקב">
+          <select id="fs"><option value="">כל הסטטוסים</option></select>
+          <select id="srt" class="hide" title="מיון בתוך כל עמודה">
+            <option value="">מיון: לפי תאריך המחלוקת</option><option value="old">מיון: הכי הרבה זמן בלי טיפול</option>
+            <option value="amt">מיון: סכום גבוה קודם</option><option value="name">מיון: לפי שם</option></select>
+          <div class="lbar"><span id="lcount"></span><span class="sp"></span><span id="upd"></span><button class="btn sm" id="rf" title="רענון עכשיו">↻ רענון</button></div>
+        </div>
+        <div id="rows"><div class="empty"><div class="spin"></div>טוען תיקים…</div></div>
+      </div>
+      <div class="shade" id="shade"></div>
+      <div class="card" id="det"><div class="empty"><div class="big">👈</div>בחר/י תיק מהרשימה.</div></div>
+    </div>
+
+    <div id="vPay" class="card hide"></div>
+    <div id="vTrack" class="hide"></div>
+    <div id="vSum" class="hide"></div>
+    <div id="vCust" class="hide"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="ctip" id="ctip"></div>
+<div class="ep hide" id="ep"><div class="eps" id="eps"></div><div class="epp card" id="epb"></div></div>
+<div class="smodal hide" id="sm"><div class="sbox card" id="sbox"></div></div>
+
+<script>
+const SB = FAKE_SB;                                             // CMS MOCK: fake server in this browser (fake-sb.js). Nothing real.
+const HOLD = "בבדיקה/המתנה";                                  // PROPOSED new status (design only): the server does not accept it yet, see save()
+const STATUSES = ["חדש","נשלחה הודעה","בתהליך",HOLD,"בוצע – ממתין לאימות","נשלח מכתב התראה","סגור"];
+const DONE = "בוצע – ממתין לאימות";
+const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
+let ME = null, ADMIN = false, EARNS = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "sum", SEL = null, WAEV = [];
+let MSGS = [], ALLCASES = [], TF = { p: "7", ch: "", st: "", q: "", col: "" };   // CMS: messages log, all cases, tracking filters
+let PTAB = "msgs", LIST = [];                                   // design only: open tab inside the case panel, order of the list on screen
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ils = n => "₪" + Number(n || 0).toLocaleString("he-IL", {minimumFractionDigits: 0, maximumFractionDigits: 2});
+const today = () => new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+const dmy = d => d.toLocaleDateString("he-IL", {day: "2-digit", month: "2-digit", year: "numeric"});
+const ym = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+const plus = n => { const d = today(); d.setDate(d.getDate() + n); return dmy(d); };
+const days = iso => iso ? Math.floor((Date.now() - new Date(iso)) / 864e5) : 999;
+const local = p => p ? "0" + p.slice(3) : "";
+const isPaid = c => Number(c.paid_amount || 0) * 100 >= c.amount - 1;
+const boss = () => ADMIN && !AGENT_VIEW;
+const ls = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch (e) { return null; } };
+const jday = iso => new Date(iso).toLocaleDateString("en-CA", {timeZone: "Asia/Jerusalem"});
+const doneToday = c => !!c.last_action_at && jday(c.last_action_at) === jday(Date.now());   // display only: handled today
+let TT;
+function toast(t, undo){                                       // undo = optional function: shows a "ביטול" button for a few seconds
+  const e = $("#toast"); clearTimeout(TT);
+  e.innerHTML = esc(t) + (undo ? ` <button class="tbtn" id="tundo">↶ ביטול</button>` : "");
+  e.style.display = "flex";
+  if (undo) $("#tundo").onclick = () => { e.style.display = "none"; undo(); };
+  TT = setTimeout(() => e.style.display = "none", undo ? 7000 : 2200);
+}
+// design only: per-viewer conveniences kept in this browser
+let SORT = ls("sort") || "", MIN = new Set(["סגור"]), LOADED_AT = 0, LOAD_FAIL = false;
+try { const m = JSON.parse(ls("minCols")); if (Array.isArray(m)) MIN = new Set(m); } catch (e) {}
+function upd(){                                                // "updated X min ago" next to the list
+  const e = $("#upd"); if (!LOADED_AT) return;
+  const m = Math.floor((Date.now() - LOADED_AT) / 60e3);
+  e.textContent = (LOAD_FAIL ? "⚠ הרענון האחרון נכשל · " : "") + (m < 1 ? "עודכן עכשיו" : `עודכן לפני ${m} דק'`);
+  e.classList.toggle("bad", LOAD_FAIL);
+}
+
+// ---------- auth ----------
+async function start(){
+  const { data } = await SB.auth.getSession();
+  if (!data.session){ $("#login").classList.remove("hide"); return; }
+  ME = data.session.user.email; $("#who").textContent = ME;
+  const a = await SB.from("coll_admins").select("email, earns").eq("email", ME); ADMIN = !!(a.data && a.data.length);
+  EARNS = !!(ADMIN && a.data[0].earns);                         // a manager who also works cases: his clicks still earn commission
+  $("#app").classList.remove("hide"); $("#login").classList.add("hide");
+  if (ADMIN){
+    AGENT_VIEW = ls("agentView") === "1";
+    $("#who").insertAdjacentHTML("beforebegin", `<button class="btn" id="av"></button>`);
+    $("#av").onclick = () => { AGENT_VIEW = !AGENT_VIEW; ls("agentView", AGENT_VIEW ? "1" : "0"); mode(); render(); };
+  }
+  mode();
+  STATUSES.forEach(s => $("#fs").insertAdjacentHTML("beforeend", `<option>${s}</option>`));
+  const v = ls("view");                                        // open on the tab used last time
+  if (["sum", "cust", "all", "pay", "track"].includes(v)) { VIEW = v; document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.v === v)); }
+  $("#srt").value = SORT;
+  await load();
+  setInterval(() => document.visibilityState === "visible" && load(), 3 * 60e3);   // payments verified in the background drop off the list
+  setInterval(upd, 30e3);
+}
+function mode(){
+  $("#banner").classList.toggle("hide", !(ADMIN && AGENT_VIEW && !EARNS));
+  if ($("#av")) $("#av").textContent = AGENT_VIEW ? "חזרה למצב מנהל" : "מצב עובד";
+}
+$("#go").onclick = async () => {
+  const { error } = await SB.auth.signInWithPassword({ email: $("#em").value.trim(), password: $("#pw").value });
+  if (error) $("#lerr").textContent = "פרטי הכניסה שגויים"; else location.reload();
+};
+$("#pw").addEventListener("keydown", e => e.key === "Enter" && $("#go").click());
+$("#out").onclick = async () => { await SB.auth.signOut(); location.reload(); };
+
+async function load(){
+  const [c, p, o, ms, ce, we, ec] = await Promise.all([
+    SB.from("coll_cases").select("*").eq("removed", false).order("latest", {ascending: false}),
+    SB.from("coll_payments").select("*").order("paid_at", {ascending: false}),
+    SB.from("coll_payouts").select("*"),
+    SB.from("cms_messages").select("*").order("at", {ascending: false}),
+    SB.from("cms_events").select("*"),
+    SB.from("coll_events").select("*"),
+    SB.from("cms_cases").select("*")]);
+  MSGS = ms.data || []; CEV = ce.data || []; WAEV = we.data || [];
+  // the email/SMS flow keeps its own status in cms_cases (coll_cases is not changed): put it on each case
+  const EC = Object.fromEntries((ec.data || []).map(r => [r.phone, r]));
+  (c.data || []).forEach(x => { const e = EC[x.phone]; x.email_status = e ? e.email_status : "חדש"; x.email_touched_at = e ? e.email_touched_at : null; x.email_last_at = e ? e.email_last_at : null; });
+  ALLCASES = c.data || [];                                     // tracking also counts closed / paid cases
+  if (c.error) { LOAD_FAIL = true; upd(); return toast("לא הצלחתי לרענן את התיקים, מנסה שוב בעוד כמה דקות"); }
+  CASES = (c.data || []).filter(x => !isPaid(x));            // paid and verified = gone from the desk
+  PAYS = p.data || []; PAYOUTS = o.data || [];
+  LOADED_AT = Date.now(); LOAD_FAIL = false; upd();
+  kpis(); render();
+}
+$("#rf").onclick = async () => { const b = $("#rf"); b.classList.add("busy"); b.textContent = "מרענן…"; await load(); b.classList.remove("busy"); b.textContent = "↻ רענון"; };
+
+// ---------- what to do next (written channel only: WhatsApp) ----------
+// day 0 first message -> day 3 reminder -> day 8 (or a refusal) letter -> 11 days after the letter final reminder -> closed
+function next(c){
+  const from = days(c.agent_touched_at), last = days(c.last_action_at);
+  switch (c.status){
+    case "חדש": return "לשלוח פנייה ראשונה";
+    case "נשלחה הודעה":
+      if (from >= 8) return "לשלוח מכתב התראה";
+      if (from >= 3 && last >= 3) return "לשלוח תזכורת";
+      return null;
+    case "בתהליך": return last >= 2 ? "מעקב: לשלוח שוב את הקישור" : null;
+    case DONE: return days(c.done_at) >= 1 ? "לא נמצא תשלום: לבקש מהלקוח צילום אישור" : null;
+    case "נשלח מכתב התראה": return last >= 11 ? "תזכורת אחרונה, ואז לסגור" : null;
+  }
+  return null;
+}
+// display only: how urgent a row looks (red / amber / blue)
+function urg(c){
+  const t = next(c); if (!t) return "";
+  if (c.status === "חדש") return "new";
+  return /מכתב|לא נמצא|אחרונה/.test(t) ? "hot" : "due";
+}
+function kpis(){
+  const m = ym(today()), mine = PAYS.filter(p => p.month === m && p.commissionable);
+  const left = CASES.filter(next).length, done = CASES.filter(c => !next(c) && doneToday(c)).length, pct = left + done ? Math.round(done * 100 / (left + done)) : 100;
+  $("#kpis").innerHTML = `<div class="kpi main"><b>${left}</b><span>לטיפול היום</span>
+      <div class="pbar"><i style="width:${pct}%"></i></div><small>טופלו היום: ${done} מתוך ${left + done}</small></div>` + [
+    ["תיקים פתוחים", CASES.filter(c => c.status !== "סגור").length + " · " + ils(CASES.filter(c => c.status !== "סגור").reduce((s, c) => s + c.amount / 100, 0))],
+    ["נגבה החודש", ils(mine.reduce((s, p) => s + p.amount - p.refunded, 0))],
+    ["עמלה החודש (20%)", ils(mine.reduce((s, p) => s + Number(p.commission), 0))],
+  ].map(([t, v]) => `<div class="kpi"><b>${v}</b><span>${t}</span></div>`).join("");
+}
+function chip(c){
+  if (c.status === DONE) return days(c.done_at) >= 1 ? `<span class="chip bad">לא נמצא תשלום</span>` : `<span class="chip warn">ממתין לאימות</span>`;
+  return `<span class="chip st" style="--sc:${COLC[c.status] || "#6b7085"}">${esc(c.status)}</span>`;
+}
+const rowHtml = c => {
+  const t = next(c), d = days(c.last_action_at || c.latest), dn = !t && doneToday(c);
+  return `
+    <div class="row u-${urg(c)} ${dn ? "done" : ""} ${SEL === c.phone ? "sel" : ""}" data-p="${c.phone}">
+      <div class="n"><b>${esc(c.name)}</b><small class="ph">${esc(local(c.phone))}</small>
+        <small>${esc(c.case_type)}</small>${t ? `<small class="todo">→ ${t}</small>` : dn ? `<small class="todo">✓ טופל היום</small>` : ""}</div>
+      <div class="side">${chip(c)}<b style="font-size:14px">${esc(c.total)}</b>${d < 999 ? `<span class="age ${t && d >= 7 ? "old" : ""}">${d ? `לפני ${d} ימים` : "היום"}</span>` : ""}</div>
+    </div>`;
+};
+function render(){
+  $("#vTrack").classList.toggle("hide", VIEW !== "track"); $("#vSum").classList.toggle("hide", VIEW !== "sum"); $("#vCust").classList.toggle("hide", VIEW !== "cust");
+  $("#kpis").classList.toggle("hide", VIEW === "track" || VIEW === "sum" || VIEW === "cust");   // these tabs have their own counters
+  if (VIEW === "cust") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return customers(); }
+  if (VIEW === "sum") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return summary(); }
+  if (VIEW === "track") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return tracking(); }
+  $("#vCases").classList.toggle("hide", VIEW === "pay"); $("#vPay").classList.toggle("hide", VIEW !== "pay");
+  if (VIEW === "pay") document.body.classList.remove("wide");
+  if (VIEW === "pay") return payroll();
+  const q = $("#q").value.trim().toLowerCase(), fs = $("#fs").value;
+  let list = VIEW === "queue" ? CASES.filter(c => next(c) || doneToday(c)) : CASES;   // handled today stays on screen, greyed, at the bottom
+  if (fs) list = list.filter(c => c.status === fs);
+  if (q) list = list.filter(c => hit(c, q));
+  let html = "";
+  if (VIEW === "queue"){                                        // follow-ups first, then new cases (newest disputes first)
+    const rank = c => c.status === "חדש" ? 1 : 0;
+    const todo = list.filter(next).sort((a, b) => rank(a) - rank(b) || (b.latest || "").localeCompare(a.latest || ""));
+    const done = list.filter(c => !next(c));
+    list = [...todo, ...done];
+    html = todo.map(rowHtml).join("") + (done.length ? `<div class="sec">✓ טופלו היום (${done.length})</div>` + done.map(rowHtml).join("") : "");
+    $("#lcount").textContent = `${todo.length} תיקים ממתינים לטיפול`;
+  } else {                                                      // all cases: a board, one column per status, each column scrolls on its own
+    const cols = fs ? [fs] : STATUSES, mini = s => !fs && MIN.has(s);   // collapsed columns (click to open again)
+    const by = { old: (a, b) => (a.last_action_at || a.latest || "").localeCompare(b.last_action_at || b.latest || ""),
+                 amt: (a, b) => b.amount - a.amount, name: (a, b) => (a.name || "").localeCompare(b.name || "", "he") }[SORT];
+    list = cols.flatMap(s => { const cs = list.filter(c => c.status === s); return by ? cs.sort(by) : cs; });
+    html = `<div class="kbox"><div class="kb" id="kb"><div class="kbin" style="grid-template-columns:${cols.map(s => mini(s) ? "56px" : "minmax(260px,1fr)").join(" ")}">` + cols.map(s => {
+      const cs = list.filter(c => c.status === s);
+      if (mini(s)) return `<div class="col min" style="--c:${COLC[s]}" data-colt="${s}" title="לחיצה לפתיחת העמודה"><span class="cnt">${cs.length}</span><b>${s}</b></div>`;
+      return `<div class="col" style="--c:${COLC[s]}"><div class="colh"><b>${s}</b><span class="cnt">${cs.length}</span>${fs ? "" : `<button class="colx" data-colt="${s}" title="כיווץ העמודה">⇥</button>`}<small>${ils(cs.reduce((t, c) => t + c.amount / 100, 0))}</small></div>
+        <div class="colb">${cs.map(rowHtml).join("") || `<div class="empty">אין תיקים</div>`}</div></div>`;
+    }).join("") + `</div></div></div>`;
+    $("#lcount").textContent = `${list.length} תיקים`;
+  }
+  $("#vCases").classList.toggle("board", VIEW === "all");
+  document.body.classList.toggle("wide", VIEW === "all");      // board uses the full window width
+  $("#srt").classList.toggle("hide", VIEW !== "all");          // sorting is for the board columns
+  LIST = list.map(c => c.phone);
+  const kbOld = $("#kb") ? $("#kb").scrollLeft : 0;
+  $("#rows").innerHTML = list.length || VIEW === "all" ? html : `<div class="empty"><div class="big">🎉</div>אין תיקים כאן.</div>`;
+  if (VIEW === "all") board(kbOld);
+}
+// search: name / phone / order / email. Exactly 4 digits = last 4 digits of the phone (or an order number).
+// Phone numbers can be typed with dashes or spaces.
+function hit(c, q){
+  const qd = q.replace(/[\s\-()+]/g, ""), ph = String(c.phone || "");
+  if (/^\d{4}$/.test(qd)) return ph.endsWith(qd) || String(c.orders_label || "").includes(qd);
+  if (/^\d{5,}$/.test(qd) && (ph.includes(qd) || local(ph).includes(qd))) return true;
+  return [c.name, c.phone, local(c.phone), c.orders_label, c.email, ...(c.orders || []).flatMap(o => (o.shipments || []).map(s => s.tracking))].join(" ").toLowerCase().includes(q);
+}
+// board: columns fill the screen height; sideways scrolling is the board's own scrollbar (shown on top by CSS)
+function board(keep){
+  const kb = $("#kb"); if (!kb) return;
+  kb.style.setProperty("--h", Math.max(300, innerHeight - kb.getBoundingClientRect().top - 54) + "px");
+  kb.scrollLeft = keep;                                       // stay where you were after a search / status change
+}
+addEventListener("resize", () => VIEW === "all" && board($("#kb")?.scrollLeft || 0));
+const COLC = {"חדש": "#2563eb", "נשלחה הודעה": "#4f46e5", "בתהליך": "#f59e0b", [HOLD]: "#8b5cf6", [DONE]: "#0d9488", "נשלח מכתב התראה": "#dc2626", "סגור": "#9ca3af"};
+const closeCase = () => $("#vCases").classList.remove("open");
+$("#shade").onclick = closeCase;
+document.addEventListener("keydown", e => e.key === "Escape" && $("#vCases").classList.contains("board") && closeCase());
+// one listener for the whole list (rows are rebuilt on every render)
+$("#rows").onclick = e => {
+  const t = e.target.closest("[data-colt]");                   // board: collapse / open a column
+  if (t) { const s = t.dataset.colt; MIN.has(s) ? MIN.delete(s) : MIN.add(s); ls("minCols", JSON.stringify([...MIN])); return render(); }
+  const r = e.target.closest(".row"); if (r) openCase(r.dataset.p);
+};
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on")); t.classList.add("on"); VIEW = t.dataset.v; ls("view", VIEW); render();
+});
+$("#srt").onchange = () => { SORT = $("#srt").value; ls("sort", SORT); render(); };
+$("#q").oninput = render; $("#fs").onchange = render;
+
+// ---------- ready messages (same wording as the guide PDF) ----------
+function msgs(c){
+  const n = c.first_name || "", ord = (c.orders_label.includes(",") ? "הזמנות " : "הזמנה ") + c.orders_label, link = c.payment_link, d7 = plus(7), d14 = plus(14);
+  const mid = c.variant === "fraud"
+    ? `המוצרים בהזמנה (${ord}) נשלחו לכתובת שנמסרה בהזמנה. התשלום עליהם, בסך ${c.total}, בוטל דרך חברת האשראי של בעל הכרטיס, והסכום עדיין לא שולם.`
+    : `המוצרים שהזמנת (${ord}) נשלחו${c.variant === "delivered" ? " ונמסרו" : ""} לכתובתך. התשלום עליהם, בסך ${c.total}, בוטל דרך חברת האשראי, והסכום עדיין לא שולם.`;
+  const ship = (c.orders || []).flatMap(o => o.shipments.map(s => `הזמנה ${o.order}: ${s.carrier} ${s.tracking} · ${s.status}${s.date ? " · " + s.date : ""}\n${s.tracking_url}`)).join("\n");
+  const steps = [
+    ["1. פנייה ראשונה", "נשלחה הודעה", `שלום ${n},\nזו פנייה רשמית של מחלקת הכספים של Smiley בנוגע לחוב פתוח על שמך.\n${mid}\nיש להסדיר את מלוא הסכום עד ${d7} בקישור האישי שלמטה.\nאם החוב לא יוסדר עד המועד הזה, הטיפול בו יעבור לשלב הבא.\nאם יש לך טענה לגבי החיוב, אפשר להשיב להודעה הזו.\n${link}`],
+    ["2. תזכורת (יום 3)", "נשלחה הודעה", `שלום ${n},\nתזכורת: החוב בסך ${c.total} בגין ${ord} עדיין לא הוסדר.\nלאחר המועד שנקבע יישלח אליך מכתב התראה רשמי.\nניתן להסדיר את החוב בקישור האישי:\n${link}`],
+    ["3. מכתב התראה (יום 8, או מיד אחרי סירוב) · לצרף את ה-PDF", "נשלח מכתב התראה", `שלום ${n},\nהחוב בסך ${c.total} טרם הוסדר.\nמצורף מכתב התראה רשמי בנוגע לחוב. יש לעיין בו.\nניתן להסדיר את מלוא החוב עד ${d14} בקישור האישי שלמטה. לאחר מועד זה נפעל כמפורט במכתב.\n${link}`],
+    ["4. תזכורת אחרונה (11 ימים אחרי המכתב)", "סגור", `שלום ${n},\nנותרו 3 ימים למועד האחרון שנקבע במכתב ההתראה.\nהחוב בסך ${c.total} עדיין פתוח. לאחר מועד זה לא תישלח פנייה נוספת.\nניתן להסדיר את החוב בקישור האישי:\n${link}`],
+  ];
+  const replies = [
+    ["הסכים לשלם / שאל איך", `מלוא החוב (${c.total}) ניתן לתשלום בקישור האישי שלהלן, דף תשלום מאובטח של Stripe (כרטיס אשראי, ולרוב גם Apple Pay ו-Google Pay). עם התשלום יישלח אישור למייל, והתיק ייסגר.\n${link}`],
+    ["\"מי אתם? זה עוקץ?\"", `זו מחלקת הכספים של Smiley, האתר try-smiley.com. ההזמנה (${ord}) בוצעה עם מספר הטלפון הזה ונשלחה לכתובת ${c.address || ""}. התשלום עליה בוטל דרך חברת האשראי. הקישור הוא דף תשלום מאובטח של Stripe בסכום החוב, ${c.total}.\n${link}`],
+    ["\"לא קיבלתי\"", `לפי התיעוד שלנו:\n${ship}\nביטול החיוב דרך חברת האשראי אינו הדרך לבירור משלוח. החוב בסך ${c.total} פתוח.\n${link}`],
+    ["\"כבר שילמתי\"", `לא התקבל תשלום בקישור האישי. אם שולם בדרך אחרת, יש לשלוח כאן צילום של אישור התשלום. עד אז התיק פתוח.\n${link}`],
+    ["הנחה / תשלומים / \"אין לי\"", `לא ניתן להסדיר את החוב בהנחה או בתשלומים. הסכום לתשלום הוא ${c.total}, בקישור האישי:\n${link}`],
+    ["\"תתבעו אותי\" / סירוב", `הודעתך נרשמה. החוב בסך ${c.total} פתוח, ויישלח אלייך מכתב התראה רשמי לפני נקיטת הליכים. עד אז עדיין ניתן להסדיר את החוב בקישור:\n${link}`],
+  ];
+  if (c.kind === "sub") replies.splice(2, 0, ["\"לא ידעתי שזה מנוי\" (לשלוח קודם את התמונה)", `ההצטרפות למנוי הוצגה באתר בארבעה מקומות: בדף המוצר, בעגלה, בסיכום ההזמנה ומעל כפתור התשלום, עם נוסח הסכמה מפורש לחיוב אוטומטי. ניתן היה לבחור במקום זה רכישה חד־פעמית.\nהמשלוחים יצאו אליך, והחוב הוא רק עליהם. ביטול מנוי מונע חיובים עתידיים בלבד, ואינו מבטל תשלום על משלוחים שכבר סופקו. המנוי כבר הופסק ולא יהיו חיובים נוספים.\n${link}`, CONSENT_IMG]);
+  return { steps, replies };
+}
+const wa = (phone, text) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+// display only: which ready message matches the next step (same rule that opens it in the list of messages)
+const stepOf = (c, todo) => !todo ? -1 : c.status === "חדש" ? 0 : todo.includes("אחרונה") ? 3 : todo.includes("מכתב") ? 2 : todo.includes("תזכורת") ? 1 : -1;
+const replyOf = (replies, todo) => !todo ? -1 : todo.includes("צילום") ? replies.findIndex(r => r[0].includes("כבר שילמתי")) : todo.includes("הקישור") ? 0 : -1;
+
+// ---------- case panel ----------
+// the panel draws at once from what is already loaded; history and the letter link fill in when they arrive
+const EVENTS = {}, LETTERS = {};
+async function letterUrl(c){
+  const k = c.phone + "|" + c.letter_path + "|" + c.letter_date, hit = LETTERS[k];
+  if (hit && hit.until > Date.now()) return hit.url;
+  const { data } = await SB.storage.from("coll-letters").createSignedUrl(c.letter_path, 3600);
+  if (data) LETTERS[k] = { url: data.signedUrl, until: Date.now() + 50 * 60e3 };
+  return data && data.signedUrl;
+}
+const PDFS = {};                                                 // the letter as a file, ready to share (one per case + letter)
+function pdfFile(c){
+  const k = c.phone + "|" + c.letter_path + "|" + c.letter_date;
+  return PDFS[k] = PDFS[k] || letterUrl(c).then(u => u ? fetch(u) : Promise.reject())
+    .then(r => r.ok ? r.blob() : Promise.reject())
+    .then(b => new File([b], `מכתב התראה - ${c.name || local(c.phone)}.pdf`, { type: "application/pdf" }))
+    .catch(e => { delete PDFS[k]; throw e; });
+}
+const evHtml =list => list.map(e => `<div class="ev ${e.status.startsWith("שולם") ? "pay" : ""}"><b>${esc(e.status)}</b> · ${new Date(e.at).toLocaleString("he-IL")}${e.note ? "\n" + esc(e.note) : ""}</div>`).join("") || `<p class="mute">אין עדיין.</p>`;
+async function copyImg(src){
+  try {                                       // the clipboard takes PNG only: redraw the JPEG on a canvas
+    const img = new Image(); img.crossOrigin = "anonymous"; img.src = src; await img.decode();
+    const cv = document.createElement("canvas"); cv.width = img.naturalWidth; cv.height = img.naturalHeight; cv.getContext("2d").drawImage(img, 0, 0);
+    const png = await new Promise(r => cv.toBlob(r, "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    toast("התמונה הועתקה, להדביק בוואטסאפ");
+  } catch (e) { toast("הדפדפן לא מאפשר להעתיק תמונה. ללחוץ עליה עם הלחצן הימני ← העתק תמונה"); }
+}
+function openCase(phone, keepScroll){
+  const prev = SEL; SEL = phone;
+  document.querySelector(`.row[data-p="${prev}"]`)?.classList.remove("sel");
+  document.querySelector(`.row[data-p="${phone}"]`)?.classList.add("sel");
+  $("#vCases").classList.add("open");                                   // phone: show the case screen
+  const c = CASES.find(x => x.phone === phone);
+  if (!c) { $("#det").innerHTML = `<div class="empty">התיק לא נמצא.</div>`; return; }
+  const { steps, replies } = msgs(c), todo = next(c), si = stepOf(c, todo), ri = si < 0 ? replyOf(replies, todo) : -1;
+  const letterBtn = (b, st) => c.letter_path ? `<button class="btn wa" data-pdf="${esc(b)}" data-pst="${st}">📤 שלח PDF ללקוח</button> <a class="btn letter" target="_blank">טוען מכתב…</a>
+      <div class="hint">"שלח PDF" פותח שיתוף עם הקובץ והטקסט (לבחור וואטסאפ). אם השיתוף לא זמין: הקובץ יורד והטקסט מועתק, לגרור את הקובץ לצ'אט ולהדביק.</div>` : `<span class="chip">מכתב בהכנה</span>`;
+  const sendBtns = (b, st, letter, big) => `<a class="btn wa ${big ? "big" : ""}" href="${wa(phone, b)}" target="_blank" data-after="${st}">פתח בוואטסאפ</a> <button class="btn ${big ? "big" : ""}" data-copy="${esc(b)}">העתק</button> ${letter ? letterBtn(b, st) : ""}`;
+  const hit = si >= 0 ? { b: steps[si][2], st: steps[si][1], letter: si === 2, t: steps[si][0] } : ri >= 0 ? { b: replies[ri][1], st: "בתהליך", t: replies[ri][0] } : null;
+  const nIdx = LIST.indexOf(phone), nxt = LIST.slice(nIdx + 1).concat(LIST.slice(0, Math.max(nIdx, 0))).find(p => p !== phone && (VIEW !== "queue" || next(CASES.find(x => x.phone === p) || {})));
+  const cur = STATUSES.indexOf(c.status), tabs = [["msgs", "הודעות לפי הסדר", steps.length], ["replies", "תשובות לטענות", replies.length], ["orders", "הזמנות ומשלוחים", (c.orders || []).length], ["hist", "היסטוריה", ""]];
+  const scroll = $("#det").scrollTop, ships = [...new Map((c.orders || []).flatMap(o => (o.shipments || []).map(s => [s.tracking, [o, s]]))).values()];   // one line per tracking number
+  $("#det").innerHTML = `
+    <div class="dhead">
+      <button class="btn back" id="back">→ חזרה לרשימה</button>
+      <h2>${esc(c.name)} ${chip(c)}</h2>
+      <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${esc(c.email)}</span></div>
+      <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}</div>
+      ${ships.length ? `<div class="ships">${ships.map(([o, s]) => `<div class="ship">📦 <span>${esc(o.order)} · ${esc(s.carrier)}</span><span class="tn">${esc(s.tracking)}</span><b>${esc(s.status)}</b>${s.date ? `<span class="mute">${esc(s.date)}</span>` : ""}<span class="sp"></span>
+        <button class="btn sm" data-copy="${esc(s.tracking)}">📋 העתק מספר מעקב</button>${s.tracking_url ? `<a class="btn sm" href="${esc(s.tracking_url)}" target="_blank">🔎 מעקב ב-17track</a>` : ""}</div>`).join("")}</div>` : ""}
+    </div>
+    <div class="dbody">
+    ${todo ? `<div class="nextc ${urg(c) === "hot" ? "hot" : ""}">
+        <div class="lbl">הצעד הבא</div><div class="what">${todo}</div>
+        ${hit ? `<div class="mute" style="font-size:13px;margin-bottom:4px">${esc(hit.t)}</div><pre>${esc(hit.b)}</pre><div class="btns" style="margin:0">${sendBtns(hit.b, hit.st, hit.letter, true)}</div>` : ""}
+      </div>`
+      : `<div class="nextc calm"><div class="lbl">הצעד הבא</div><div class="what">${doneToday(c) ? "✓ טופל היום. אין צעד פתוח כרגע" : "אין צעד פתוח כרגע"}</div></div>`}
+    ${nxt ? `<div class="btns"><button class="btn p" id="nextCase">לתיק הבא ←</button></div>` : ""}
+
+    <h3>סטטוס</h3>
+    <div class="steps">${STATUSES.filter(s => s !== "חדש").map(s => { const i = STATUSES.indexOf(s); return `<button class="btn ${s === c.status ? "p" : i < cur ? "past" : ""}" data-st="${s}" title="לחיצה משנה את הסטטוס">${s}</button>`; }).join("")}</div>
+    <div class="hint">הסטטוס הנוכחי מסומן. לחיצה על שלב אחר משנה את הסטטוס של הלקוח.</div>
+
+    <div class="ptabs">${tabs.map(([k, t, n]) => `<button class="ptab ${PTAB === k ? "on" : ""}" data-pt="${k}">${t}${n !== "" ? `<span class="cnt">${n}</span>` : ""}</button>`).join("")}</div>
+
+    <div class="pane" data-pane="msgs">
+    ${steps.map(([t, st, b], i) => `<details class="msg ${i === si ? "hl" : ""}" ${i === si ? "open" : ""}>
+      <summary>${esc(t)}</summary><pre>${esc(b)}</pre>
+      ${sendBtns(b, st, t.startsWith("3"))}</details>`).join("")}
+    </div>
+
+    <div class="pane" data-pane="replies">
+    ${replies.map(([t, b, img], i) => `<details class="msg ${i === ri ? "hl" : ""}" ${i === ri ? "open" : ""}><summary>${esc(t)}</summary>${img ? `<img class="shot" src="${img}" alt="התמונה לשליחה" crossorigin="anonymous" data-zoom="${img}">
+      <button class="btn" data-img="${img}">העתק תמונה</button>` : ""}<pre>${esc(b)}</pre>
+      ${sendBtns(b, "בתהליך")}</details>`).join("")}
+    </div>
+
+    <div class="pane" data-pane="orders">
+    ${(c.orders || []).map(o => `<div class="order"><b>${esc(o.order)}</b> · ${esc(o.order_date)} · ${esc(o.amount)}<br><span class="mute">${esc(o.products)}</span>
+      ${o.shipments.map(s => `<br>${esc(s.carrier)} ${esc(s.tracking)} · <b>${esc(s.status)}</b>${s.date ? " · " + esc(s.date) : ""} · <a href="${esc(s.tracking_url)}" target="_blank">מעקב ב-17track</a>`).join("")}</div>`).join("")}
+    <div class="mute" style="font-size:13px">📍 ${esc(c.address || "")}</div>
+    </div>
+
+    <div class="pane" data-pane="hist">
+    <div id="hist">${EVENTS[phone] ? evHtml(EVENTS[phone]) : `<p class="mute">טוען…</p>`}</div>
+    </div>
+    </div>`;
+  const showPane = k => { PTAB = k; document.querySelectorAll("[data-pt]").forEach(b => b.classList.toggle("on", b.dataset.pt === k)); document.querySelectorAll("[data-pane]").forEach(p => p.classList.toggle("hide", p.dataset.pane !== k)); };
+  showPane(PTAB);
+  document.querySelectorAll("[data-pt]").forEach(b => b.onclick = () => showPane(b.dataset.pt));
+  $("#det").scrollTop = keepScroll || prev === phone ? scroll : 0;
+  if (prev !== phone && innerWidth <= 860) scrollTo(0, 0);
+  $("#back").onclick = () => { $("#vCases").classList.remove("open"); document.querySelector(`.row[data-p="${phone}"]`)?.scrollIntoView({block: "center"}); };
+  if ($("#nextCase")) $("#nextCase").onclick = () => { openCase(nxt); document.querySelector(`.row[data-p="${nxt}"]`)?.scrollIntoView({block: "nearest"}); };
+  document.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
+  document.querySelectorAll("[data-img]").forEach(b => b.onclick = () => copyImg(b.dataset.img));
+  document.querySelectorAll("[data-zoom]").forEach(i => i.onclick = () => window.open(i.dataset.zoom, "_blank"));
+  SB.from("coll_events").select("*").eq("phone", phone).order("at", {ascending: false}).then(({ data }) => {
+    EVENTS[phone] = data || [];
+    if (SEL === phone && $("#hist")) $("#hist").innerHTML = evHtml(EVENTS[phone]);
+  });
+  if (c.letter_path) letterUrl(c).then(u => {
+    if (SEL !== phone) return;
+    document.querySelectorAll(".letter").forEach(a => { if (u) { a.href = u; a.textContent = "הורד מכתב PDF"; } else a.textContent = "המכתב לא נטען, לפתוח שוב את התיק"; });
+  });
+  // optimistic: the screen moves at once, the server call runs behind it; on an error the case goes back as it was
+  const save = async (st, isUndo) => {
+    if (st === HOLD) return toast("סטטוס חדש בהצעה: יופעל אחרי שיאיר יוסיף אותו בשרת");   // PROPOSED: remove this line once coll_set_status accepts HOLD
+    const c = CASES.find(x => x.phone === phone); if (!c) return;   // the background refresh may have replaced the objects
+    const before = { ...c }, now = new Date().toISOString();
+    Object.assign(c, { status: st, last_action_at: now, done_at: st === DONE ? now : c.done_at,
+                       agent_touched_at: c.agent_touched_at || (st !== "חדש" && (!ADMIN || EARNS) ? now : null) });
+    (EVENTS[phone] = EVENTS[phone] || []).unshift({ status: st, at: now });
+    // undo = the same status call with the previous status (a misclick can be taken back for a few seconds)
+    toast((isUndo ? "הוחזר ל: " : "סטטוס: ") + st, isUndo || before.status === st ? null : () => save(before.status, true));
+    kpis(); render(); if (SEL === phone) openCase(phone);
+    const { error } = await SB.rpc("coll_set_status", { p_phone: phone, p_status: st });
+    if (error) {
+      Object.assign(c, before); EVENTS[phone].shift();
+      toast("שגיאה, הסטטוס לא נשמר: " + error.message); kpis(); render(); if (SEL === phone) openCase(phone);
+    }
+  };
+  // letter PDF: share the file + text (phone / Windows share), or download it and copy the text
+  if (c.letter_path) pdfFile(c).catch(() => {});                  // fetch ahead so sharing opens at once
+  document.querySelectorAll("[data-pdf]").forEach(b => b.onclick = async () => {
+    const msg = b.dataset.pdf, st = b.dataset.pst;
+    navigator.clipboard.writeText(msg).catch(() => {});
+    b.disabled = true;
+    try {
+      const f = await pdfFile(c);
+      let shared = false;
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        try { await navigator.share({ files: [f], text: msg }); shared = true; }
+        catch (e) { if (e.name === "AbortError") { b.disabled = false; return; } }   // cancelled = nothing happens
+      }
+      if (shared) save(st);                                     // sent = same status move as "פתח בוואטסאפ"
+      else {
+        const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; a.click();
+        toast("הקובץ ירד והטקסט הועתק: לגרור את הקובץ לצ'אט בוואטסאפ ולהדביק");
+      }
+    } catch (e) { toast("לא הצלחתי להכין את ה-PDF, לפתוח שוב את התיק"); }
+    b.disabled = false;
+  });
+  document.querySelectorAll("[data-st]").forEach(b => b.onclick = () => {
+    const cur = (CASES.find(x => x.phone === phone) || c).status;
+    if (b.dataset.st === "סגור" && cur !== "סגור" && !b.classList.contains("sure")) {   // closing asks for a second click
+      b.classList.add("sure"); b.textContent = "ללחוץ שוב לסגירה";
+      return setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = "סגור"; } }, 4000);
+    }
+    save(b.dataset.st);
+  });
+  // sending a step from here also moves the status (a reply only moves a new case to "in progress")
+  document.querySelectorAll("[data-after]").forEach(b => b.addEventListener("click", () => {
+    const st = b.dataset.after, cur = (CASES.find(x => x.phone === phone) || c).status;
+    if (st === "בתהליך" ? cur === "חדש" || cur === "נשלחה הודעה" : true) setTimeout(() => save(st));   // after the link has opened
+  }));
+}
+
+// ---------- CMS: send a stage by email + SMS (mock) ----------
+// The window shows exactly what goes out, to whom, and every rule check. "שלח" calls the server (cms_send),
+// which checks the same rules again, logs the messages, moves the status and later reports delivery.
+const CH = { email: "📧 מייל", sms: "💬 SMS" }, MST = { queued: ["בתור", ""], sent: ["נשלח", "warn"], delivered: ["נמסר", "ok"], failed: ["נכשל", "bad"] };
+// ---------- CMS: the email/SMS case panel (a drawer of its own; the WhatsApp panel is not used here) ----------
+// Same customer details as WhatsApp. Its OWN status (email_status) and history (cms_events), changed only here.
+const ESTAT = ["נשלחה הודעה", "בתהליך", HOLD, DONE, "נשלח מכתב התראה", "סגור"];
+let EP = null, CEV = [];
+const echip = st => `<span class="chip st" style="--sc:${COLC[st || "חדש"] || "#6b7085"}">${esc(st || "חדש")}</span>`;
+const hm = iso => new Date(iso).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+function openEmail(phone){
+  const c = ALLCASES.find(x => x.phone === phone); if (!c) return;
+  EP = phone;
+  const t = CMS_SEND.track(c, MSGS), mine = MSGS.filter(m => m.phone === phone).sort((a, b) => b.at.localeCompare(a.at));
+  const ev = CEV.filter(e => e.phone === phone).sort((a, b) => b.at.localeCompare(a.at));
+  const st = c.email_status || "חדש", cur = ESTAT.indexOf(st);
+  const sentStage = s => { const g = mine.filter(m => m.stage === s && m.status !== "failed"); return g.length ? g : null; };
+  const card = (cls, what, more) => `<div class="nextc ${cls}"><div class="lbl">הצעד הבא</div><div class="what">${what}</div>${more || ""}</div>`;
+  const nx = t.closed ? card("calm", isPaid(c) ? "✓ שולם ואומת ב-Stripe" : "התיק סגור בזרימת המייל/SMS")
+    : t.waiting ? card("calm", `${esc(st)}: לא שולחים שלב הבא עד שמתבהר`)
+    : t.talking ? card("", "בתהליך מול הלקוח", `<div class="mute">השלב הבא לא נשלח לבד. כשהשיחה נגמרת, לשנות סטטוס או לשלוח את השלב הבא מהרשימה למטה.</div>`)
+    : !t.next ? card("calm", "כל 4 השלבים נשלחו")
+    : t.blocked ? card("", `שלב ${t.next} · ${CMS_T.NAMES[t.next]}: ${t.blocked}`)
+    : t.manualDue ? card("hot", "לשלוח עכשיו: שלב 1 · פנייה ראשונה",
+        `<div class="mute">אחרי השליחה, שלבים 2–4 יישלחו אוטומטית לפי הימים (א׳–ה׳, 08:00–20:00).</div><div class="btns" style="margin:8px 0 0"><button class="btn send big" data-es="1">📧💬 תצוגה ושליחה</button></div>`)
+    : card("auto", `⏱ יישלח אוטומטית: שלב ${t.next} · ${CMS_T.NAMES[t.next]}`,
+        `<div class="mute">${t.sendAtText}. אין צורך ללחוץ. כדי לעצור: לשנות סטטוס ל"בתהליך" או "בבדיקה/המתנה".</div><div class="btns" style="margin:8px 0 0"><button class="btn sm" data-es="${t.next}">תצוגה (אפשר לשלוח עכשיו במקום לחכות)</button></div>`);
+  $("#epb").innerHTML = `
+    <div class="dhead">
+      <button class="btn sm" id="epx">✕ סגירה</button>
+      <h2>${esc(c.name)} ${echip(st)}</h2>
+      <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${c.email ? esc(c.email) : `<span class="wn">אין מייל</span>`}</span></div>
+      <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.email ? `<button class="btn sm" data-copy="${esc(c.email)}">📋 העתק מייל</button>` : ""}</div>
+      ${phaseLine(t)}
+      <div class="wahint">💬 בוואטסאפ: <b>${esc(c.status)}</b> · זרימה נפרדת, לא משתנה מכאן</div>
+    </div>
+    <div class="dbody">
+      ${nx}
+      <h3>סטטוס מייל / SMS</h3>
+      <div class="steps">${ESTAT.map((s, i) => `<button class="btn ${s === st ? "p" : i < cur ? "past" : ""}" data-est="${s}">${s}</button>`).join("")}</div>
+      <div class="hint">הסטטוס של זרימת המייל/SMS בלבד. שליחת שלב מעדכנת אותו לבד, ואפשר גם לשנות ידנית.</div>
+      <h3>4 השלבים</h3>
+      <div class="stg">${[1, 2, 3, 4].map(s => { const g = sentStage(s), e = g && g.find(m => m.channel === "email"), m = g && g.find(m => m.channel === "sms");
+        return `<div class="sr ${g ? "done" : t.next === s && !t.closed && !t.waiting ? "nx" : ""}"><b>${g ? "✓" : s}</b><div class="sx"><div>שלב ${s} · ${CMS_T.NAMES[s]}</div>
+          <div class="mute">${g ? `נשלח ${hm(g[g.length - 1].at)} · 📧 ${DLV(e && e.status)} · 💬 ${DLV(m && m.status)} · מועד ללקוח ${esc(g[0].due || "")}`
+            : t.next === s ? (s === 1 ? "ממתין לשליחה ידנית" : t.blocked ? "⏱ " + t.blocked : "⏱ אוטומטי · " + t.sendAtText) : s > 1 ? "⏱ אוטומטי" : "עוד לא"}</div></div>
+          <button class="btn sm" data-es="${s}">${g ? "תצוגה" : "תצוגה ושליחה"}</button></div>`; }).join("")}</div>
+      <h3>מיילים ו-SMS שנשלחו</h3>
+      <div class="mlog">${mine.map(m => `<div class="m"><b>${CH[m.channel]}</b> שלב ${m.stage} · ${esc(CMS_T.NAMES[m.stage])}
+        <span class="mute">${hm(m.at)} · ${esc(m.channel === "sms" ? local(m.to) : m.to)}</span>
+        <span class="chip ${MST[m.status][1]} st">${MST[m.status][0]}</span>${m.error ? `<div class="er" style="width:100%">${esc(m.error)}</div>` : ""}</div>`).join("") || `<p class="mute">עוד לא נשלחו מיילים או SMS לתיק הזה.</p>`}</div>
+      <h3>היסטוריית מייל / SMS</h3>
+      ${ev.map(e => `<div class="ev"><b>${esc(e.status)}</b> · ${new Date(e.at).toLocaleString("he-IL")}${e.note ? "\n" + esc(e.note) : ""}</div>`).join("") || `<p class="mute">אין עדיין.</p>`}
+      <h3>הזמנות ומשלוחים</h3>
+      ${(c.orders || []).map(o => `<div class="order"><b>${esc(o.order)}</b> · ${esc(o.order_date)} · ${esc(o.amount)}<br><span class="mute">${esc(o.products)}</span>
+        ${o.shipments.map(s => `<br>${esc(s.carrier)} ${esc(s.tracking)} · <b>${esc(s.status)}</b>${s.date ? " · " + esc(s.date) : ""}`).join("")}</div>`).join("")}
+      <div class="mute" style="font-size:13px">📍 ${esc(c.address || "")}</div>
+    </div>`;
+  $("#ep").classList.remove("hide");
+  $("#epx").onclick = closeEmail;
+  $("#epb").querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
+  $("#epb").querySelectorAll("[data-es]").forEach(b => b.onclick = () => openSend(phone, Number(b.dataset.es)));
+  $("#epb").querySelectorAll("[data-est]").forEach(b => b.onclick = async () => {
+    const to = b.dataset.est;
+    if (to === st) return;
+    if (to === "סגור" && !b.classList.contains("sure")) {                // closing asks for a second click, like WhatsApp
+      b.classList.add("sure"); b.textContent = "ללחוץ שוב לסגירה";
+      return setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = "סגור"; } }, 4000);
+    }
+    const { error } = await SB.rpc("cms_set_status", { p_phone: phone, p_status: to, p_note: "עודכן ידנית" });
+    if (error) return toast("שגיאה, הסטטוס לא נשמר: " + error.message);
+    toast("סטטוס מייל/SMS: " + to, async () => { await SB.rpc("cms_set_status", { p_phone: phone, p_status: st, p_note: "בוטל" }); await load(); if (EP === phone) openEmail(phone); });
+    await load(); if (EP === phone) openEmail(phone);
+  });
+}
+function closeEmail(){ EP = null; $("#ep").classList.add("hide"); }
+async function openSend(phone, stage){
+  const c = ALLCASES.find(x => x.phone === phone); if (!c) return;
+  const { data: log } = await SB.from("cms_messages").select("*").eq("phone", phone);
+  const pl = CMS_SEND.plan(c, stage, { log: log || [], ignoreQuiet: TESTQ() }), m = pl.msg;
+  const li = (cls, t) => `<li class="${cls}">${cls === "er" ? "⛔" : cls === "wn" ? "⚠️" : "✓"} ${esc(t)}</li>`;
+  $("#sbox").innerHTML = `
+    <div class="sh"><h3>שלב ${stage} · ${esc(m.name)} · ${esc(c.name)}</h3><span class="sp"></span><button class="btn sm" id="sx">✕ סגירה</button></div>
+    <div class="sg">
+      <div class="sl">
+        <h4>נשלח אל</h4>
+        <div>${pl.to.email ? "📧 " + esc(pl.to.email) : `<span class="wn">📧 לא יישלח מייל</span>`}</div>
+        <div>${pl.to.sms ? "💬 " + esc(local(pl.to.sms)) : `<span class="wn">💬 לא יישלח SMS</span>`}</div>
+        <h4>בדיקות</h4>
+        <ul class="chk">${pl.errors.map(e => li("er", e)).join("")}${pl.warnings.map(w => li("wn", w)).join("")}${pl.ok && !pl.warnings.length ? li("okk", "הכל תקין") : ""}</ul>
+        <h4>אחרי השליחה</h4>
+        <div>סטטוס מייל/SMS: <b>${esc(pl.statusAfter)}</b> <span class="mute">(הוואטסאפ לא משתנה)</span> · מועד אחרון ללקוח: <b>${esc(pl.due)}</b></div>
+        ${pl.to.sms ? `<h4>💬 SMS · ${m.smsInfo.len} תווים · ${m.smsInfo.parts} ${m.smsInfo.parts === 1 ? "הודעה" : "חלקים"}</h4><div class="bub">${esc(m.sms)}</div>` : ""}
+      </div>
+      <div>
+        ${pl.to.email ? `<div class="mh"><div class="mute">מאת: Smiley · מחלקת הכספים</div><div class="s">${esc(m.subject)}</div><div class="mute">${esc(m.pre)}</div>
+          ${m.attach ? `<span class="att">📎 ${esc(m.attach)}</span>` : ""}</div><iframe id="sif" title="תצוגת המייל"></iframe>`
+          : `<div class="empty">אין כתובת מייל תקינה, לכן נשלח SMS בלבד.<br>כדאי להמשיך עם הלקוח בוואטסאפ.</div>`}
+      </div>
+    </div>
+    <div class="sf">
+      <button class="btn send big" id="sgo" ${pl.ok ? "" : "disabled style='opacity:.45;cursor:not-allowed'"}>📧💬 שלח עכשיו</button>
+      <button class="btn" id="sx2">ביטול</button>
+      <span class="mute" style="font-size:13px">${pl.ok ? "מצב הדגמה: שום דבר לא יוצא באמת." : "אי אפשר לשלוח: ראו את הבדיקות מימין."}</span>
+    </div>`;
+  if ($("#sif")) $("#sif").srcdoc = m.html;
+  $("#sm").classList.remove("hide");
+  const close = () => $("#sm").classList.add("hide");
+  $("#sx").onclick = close; $("#sx2").onclick = close; $("#sm").onclick = e => e.target.id === "sm" && close();
+  $("#sgo").onclick = async () => {
+    if (!pl.ok) return;
+    $("#sgo").disabled = true; $("#sgo").textContent = "שולח…";
+    // the server (Edge Function cms-send) checks every rule again, sends, logs and moves the email/SMS status
+    const { data, error } = await SB.functions.invoke("cms-send", { body: { phone, stage, ignore_quiet: TESTQ() } });
+    const why = error ? error.message : data && !data.ok ? data.error || (data.errors || []).join(" · ") : "";
+    if (why) { $("#sgo").textContent = "📧💬 שלח עכשיו"; $("#sgo").disabled = false; await load(); return toast("לא נשלח: " + why); }
+    close(); toast(`שלב ${stage} נשלח: ${data.sent.map(x => CH[x]).join(" + ")}${data.failed && data.failed.length ? ` · נכשל: ${data.failed.map(x => CH[x]).join(" + ")}` : ""} · סטטוס מייל/SMS: ${data.statusAfter}`);
+    await load(); if (EP === phone) openEmail(phone);
+  };
+}
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (!$("#sm").classList.contains("hide")) $("#sm").classList.add("hide"); else if (EP) closeEmail(); });
+$("#eps").onclick = closeEmail;
+// delivery reports from the (fake) providers: refresh the open case
+addEventListener("cms-report", e => {
+  const r = e.detail; if (r.status === "failed") toast(`⚠ ${CH[r.channel]} ל${CASES.find(c => c.phone === r.phone)?.name || ""} נכשל: ${r.error}`);
+  load().then(() => { if (EP === r.phone) openEmail(r.phone); });   // tracking + the open email panel show delivery live
+});
+const TESTQ = () => !!$("#mq") && $("#mq").checked;           // test only: ignore the sending window (the real server refuses it outside test mode)
+$("#mq").checked = ls("cms-iq") === "1"; $("#mq").onchange = () => ls("cms-iq", $("#mq").checked ? "1" : "0");
+$("#mreset").onclick = () => MOCK_RESET();
+$("#mrun").onclick = async () => { const { data } = await SB.rpc("cms_auto_run"); if (!data.length) toast("⏱ המתזמן רץ: אין שלבים שהגיע זמנם" + (CMS_SEND.quiet(new Date()) && !$("#mq").checked ? " (מחוץ לחלון השליחה)" : "")); await load(); };
+$("#mskip").onclick = async () => { const { data } = await SB.rpc("mock_skip_day"); toast(`⏩ עבר יום (דמו)${data.length ? "" : " · לא נשלח כלום אוטומטית"}`); await load(); if (EP) openEmail(EP); };
+// the scheduler sent stages by itself: tell the agent and refresh
+addEventListener("cms-auto", e => { toast(`⏱ נשלחו אוטומטית: ${e.detail.map(x => `${x.name} (שלב ${x.stage})`).join(", ")}`); load().then(() => { if (EP) openEmail(EP); }); });
+// header: one dot for "are we connected to the email / SMS systems" (details on connections.html)
+let HEALTH = null;
+async function conn(){
+  const { data: h, error } = await SB.functions.invoke("cms-health");
+  HEALTH = error || !h ? { error: error ? error.message : "אין תשובה" } : h;
+  const st = error || !h ? "err" : h.systems.some(s => s.state === "err") ? "err" : h.mode === "mock" ? "mock" : h.systems.some(s => s.state === "off") ? "off" : h.mode === "test" ? "test" : "ok";
+  const t = { ok: ["#4ade80", "מחובר"], test: ["#fcd34d", "מחובר · מצב בדיקה"], mock: ["#fcd34d", "דמו · לא מחובר באמת"], off: ["#d1d5db", "חיבור חלקי"], err: ["#f87171", "תקלת חיבור"] }[st];
+  $("#conn").innerHTML = `<span style="color:${t[0]}">●</span> ${t[1]}`;
+}
+// click the dot: every system, connected or not, and what is missing (no separate page)
+$("#conn").onclick = async e => {
+  e.preventDefault(); await conn(); const h = HEALTH;
+  const ST = { ok: ["🟢", "מחובר"], mock: ["🟡", "דמו"], off: ["⚪", "לא מוגדר"], err: ["🔴", "תקלה"] }, a = h.activity || {};
+  $("#sbox").innerHTML = `<div class="sh"><h3>🔌 חיבורים · מייל ו-SMS</h3><span class="sp"></span><button class="btn sm" id="sx">✕ סגירה</button></div>
+    <div style="padding:14px 18px">${h.error ? `<p class="er">לא הצלחתי לבדוק: ${esc(h.error)}</p>` : `
+      <div class="stg">${h.systems.map(x => `<div class="sr ${x.state === "ok" ? "done" : ""}"><b>${ST[x.state][0]}</b><div class="sx"><div><b>${esc(x.name)}</b> · ${ST[x.state][1]}${x.ms ? ` <span class="mute">${x.ms}ms</span>` : ""}</div>
+        <div class="mute">${esc(x.detail || "")}${x.need ? ` · חסר: ${esc(x.need)}` : ""}</div></div></div>`).join("")}</div>
+      <h3>פעילות ב-24 השעות האחרונות</h3>
+      <div class="mute">נשלחו ${a.sent_24h || 0} · נכשלו ${a.failed_24h || 0} · ממתינים לאישור מסירה ${a.pending || 0}${a.last_email ? ` · מייל אחרון ${hm(a.last_email)}` : ""}${a.last_sms ? ` · SMS אחרון ${hm(a.last_sms)}` : ""}</div>
+      <div class="hint">נבדק ${new Date(h.checked_at).toLocaleTimeString("he-IL")} · ${esc(CMS_SEND.quiet(new Date()) || "חלון השליחה פתוח עכשיו")}</div>`}</div>`;
+  $("#sm").classList.remove("hide");
+  $("#sx").onclick = () => $("#sm").classList.add("hide"); $("#sm").onclick = ev => ev.target.id === "sm" && $("#sm").classList.add("hide");
+};
+conn(); setInterval(conn, 60e3);
+
+// ---------- CMS: tracking tab (where every customer stands + every email / SMS we sent) ----------
+const STG = ["ממתינים לפנייה ראשונה", "שלב 1 · פנייה ראשונה", "שלב 2 · תזכורת", "שלב 3 · מכתב התראה", "שלב 4 · תזכורת אחרונה"];
+const DLV = s => s === "delivered" ? `<span class="okk" title="נמסר">✓</span>` : s === "failed" ? `<span class="er" title="נכשל">✕</span>` : s ? `<span class="wn" title="נשלח, ממתין לאישור מסירה">…</span>` : `<span class="mute">–</span>`;
+const ago = d => { const n = Math.floor((Date.now() - d) / 864e5); return n <= 0 ? "היום" : n === 1 ? "אתמול" : `לפני ${n} ימים`; };
+const inD = d => { const n = Math.ceil((d - Date.now()) / 864e5); return n <= 1 ? "מחר" : `בעוד ${n} ימים`; };
+// where the customer is + what comes next and when (email/SMS flow)
+function phaseLine(t){
+  const cur = t.stage ? `שלב ${t.stage} · ${CMS_T.NAMES[t.stage]}` : "עוד לא נשלח";
+  const nx = t.closed ? "התיק סגור" : t.waiting ? "מושהה" : t.talking ? "מושהה (בתהליך)" : !t.next ? "כל השלבים נשלחו"
+    : t.manualDue ? "הבא: שלב 1 · ממתין ללחיצה" : `הבא: שלב ${t.next} · ${t.sendAtText}${t.blocked ? " · " + t.blocked : ""}`;
+  return `<div class="phl"><span class="ph1">📍 ${cur}</span><span class="ph2">${nx}</span></div>`;
+}
+function tracking(){
+  const now = new Date(), T = ALLCASES.map(c => ({ c, t: CMS_SEND.track(c, MSGS, now) }));
+  const act = T.filter(x => !x.t.closed && !x.t.waiting), due = act.filter(x => x.t.manualDue), autoQ = act.filter(x => x.t.auto);
+  const today = jday(Date.now()), sentToday = MSGS.filter(m => jday(m.at) === today);
+  const newToday = act.filter(x => x.t.stage === 0 && x.c.latest && jday(x.c.latest) === today).length;
+  const failed = MSGS.filter(m => m.status === "failed"), dlv = MSGS.filter(m => m.status === "delivered").length;
+  // pipeline: one column per stage, due-now first
+  const cols = [0, 1, 2, 3, 4].map(s => act.filter(x => x.t.stage === s)
+    .sort((a, b) => (b.t.manualDue - a.t.manualDue) || ((a.t.sendAt || a.t.due || 0) - (b.t.sendAt || b.t.due || 0))));
+  const card = ({ c, t }) => `<div class="tc ${t.manualDue ? "due" : t.talking ? "talk" : t.blocked ? "blk" : t.auto ? "auto" : t.next ? "sched" : "fin"} ${t.failed ? "fl" : ""}" data-open="${c.phone}">
+      <div class="tt"><b>${esc(c.name)}</b><b>${esc(c.total)}</b></div>
+      <div class="mute ph">${esc(local(c.phone))}${c.email ? "" : " · אין מייל"}</div>
+      ${phaseLine(t)}
+      ${t.lastAt ? `<div class="tl">נשלח ${ago(t.lastAt)} · 📧 ${DLV(t.email)} · 💬 ${DLV(t.sms)}</div>` : t.stage ? `<div class="tl mute">סומן ידנית בסטטוס המייל</div>` : `<div class="tl mute">${c.latest && jday(c.latest) === today ? "🆕 נכנס היום" : "עוד לא נשלח דבר"}</div>`}
+      ${t.failed ? `<div class="tl er">⚠ מייל חזר: לבדוק כתובת</div>` : ""}
+      ${t.next ? t.manualDue ? `<div class="tn"><span class="er">לשלוח שלב 1 עכשיו</span><button class="btn send sm" data-tsend="${c.phone}|1">📧💬 שלח</button></div>`
+        : ""
+        : t.talking ? `<div class="tn wn">בתהליך מול הלקוח · השלב הבא לא נשלח לבד</div>` : `<div class="tn mute">כל השלבים נשלחו</div>`}
+    </div>`;
+  // log: one row per send (both channels of the same stage together)
+  const days = { "1": 1, "7": 7, "30": 30 }[TF.p], from = days ? Date.now() - days * 864e5 : 0;
+  const groups = {};
+  MSGS.forEach(m => { const k = m.phone + "|" + m.stage + "|" + m.at.slice(0, 16); (groups[k] = groups[k] || { phone: m.phone, stage: m.stage, at: m.at, ch: {} }).ch[m.channel] = m; });
+  const name = p => (ALLCASES.find(c => c.phone === p) || {}).name || local(p);
+  let rows = Object.values(groups).filter(g => new Date(g.at) >= from)
+    .filter(g => !TF.ch || g.ch[TF.ch])
+    .filter(g => !TF.st || Object.values(g.ch).some(m => TF.st === "sent" ? m.status === "sent" || m.status === "queued" : m.status === TF.st))
+    .filter(g => !TF.q || hit(ALLCASES.find(c => c.phone === g.phone) || { phone: g.phone }, TF.q.toLowerCase()))
+    .sort((a, b) => b.at.localeCompare(a.at));
+  const sel = (id, v, opts) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${k === v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+  $("#vTrack").innerHTML = `
+    <div class="kpis tk">
+      <button class="kpi main" data-tf="due"><b>${due.length}</b><span>לשלוח עכשיו (שלב 1)</span><small>⏱ ${autoQ.length} בתור האוטומטי (שלבים 2–4)</small></button>
+      <button class="kpi" data-tf="new"><b>${cols[0].length}</b><span>חדשים שעוד לא קיבלו כלום</span><small>${newToday ? `🆕 ${newToday} נכנסו היום` : "&nbsp;"}</small></button>
+      <button class="kpi" data-tf="today"><b>${new Set(sentToday.map(m => m.phone)).size}</b><span>לקוחות שקיבלו הודעה היום</span><small>${sentToday.length} מיילים ו-SMS</small></button>
+      <button class="kpi" data-tf="dlv"><b>${MSGS.length ? Math.round(dlv * 100 / MSGS.length) : 100}%</b><span>נמסרו</span><small>${dlv} מתוך ${MSGS.length}</small></button>
+      <button class="kpi ${failed.length ? "bad" : ""}" data-tf="failed"><b>${failed.length}</b><span>נכשלו</span><small>${failed.length ? "ללחוץ לרשימה" : "&nbsp;"}</small></button>
+    </div>
+    <div class="card tbox">
+      <div class="th"><h3>איפה כל לקוח עומד</h3><span class="mute">${act.length} פעילים · ${T.filter(x => x.t.waiting).length} ממתינים לאימות/בהמתנה · ${T.filter(x => x.t.closed).length} סגורים</span></div>
+      <div class="tp">${cols.map((cs, s) => `<div class="tcol ${TF.col === String(s) ? "on" : ""}"><div class="tch"><b>${STG[s]}</b><span class="cnt">${cs.length}</span>${cs.filter(x => x.t.manualDue).length ? `<span class="chip bad">${cs.filter(x => x.t.manualDue).length} לשלוח</span>` : cs.filter(x => x.t.auto).length ? `<span class="chip au">⏱ ${cs.filter(x => x.t.auto).length}</span>` : ""}</div>
+        <div class="tcb">${cs.map(card).join("") || `<div class="empty">אין לקוחות</div>`}</div></div>`).join("")}</div>
+    </div>
+    <div class="card tbox" id="tlog">
+      <div class="th"><h3>מיילים ו-SMS שנשלחו</h3>
+        <input id="tq" placeholder="🔍 שם / טלפון / 4 ספרות" value="${esc(TF.q)}">
+        ${sel("tp", TF.p, [["1", "היום"], ["7", "7 ימים"], ["30", "30 יום"], ["", "הכל"]])}
+        ${sel("tch", TF.ch, [["", "מייל + SMS"], ["email", "📧 מייל בלבד"], ["sms", "💬 SMS בלבד"]])}
+        ${sel("tst", TF.st, [["", "כל הסטטוסים"], ["delivered", "נמסר"], ["sent", "נשלח, ממתין"], ["failed", "נכשל"]])}
+        <span class="mute">${rows.length} שליחות</span></div>
+      <div class="tbl"><table><tr><th>מתי</th><th>לקוח</th><th>שלב</th><th>📧 מייל</th><th>💬 SMS</th><th>מועד אחרון ללקוח</th></tr>
+      ${rows.map(g => { const e = g.ch.email, s = g.ch.sms; return `<tr data-open="${g.phone}" class="${Object.values(g.ch).some(m => m.status === "failed") ? "flr" : ""}">
+        <td>${new Date(g.at).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+        <td><b>${esc(name(g.phone))}</b><br><span class="mute">${esc(local(g.phone))}</span></td>
+        <td>${g.stage} · ${esc(CMS_T.NAMES[g.stage])}</td>
+        <td>${e ? `${DLV(e.status)} <span class="mute">${esc(e.to)}</span>${e.error ? `<br><span class="er">${esc(e.error)}</span>` : ""}` : `<span class="mute">לא נשלח</span>`}</td>
+        <td>${s ? `${DLV(s.status)} <span class="mute">${s.parts ? s.parts + " חלקים" : ""}</span>` : `<span class="mute">לא נשלח</span>`}</td>
+        <td>${esc((e || s || {}).due || "")}</td></tr>`; }).join("") || `<tr><td colspan="6" class="mute">אין שליחות בטווח הזה.</td></tr>`}
+      </table></div>
+    </div>`;
+  const re = () => { tracking(); };
+  $("#tq").oninput = e => { TF.q = e.target.value; re(); const i = $("#tq"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+  $("#tp").onchange = e => { TF.p = e.target.value; re(); };
+  $("#tch").onchange = e => { TF.ch = e.target.value; re(); };
+  $("#tst").onchange = e => { TF.st = e.target.value; re(); };
+  document.querySelectorAll("[data-tf]").forEach(b => b.onclick = () => {
+    const k = b.dataset.tf;
+    if (k === "failed") { Object.assign(TF, { st: "failed", p: "" }); re(); return $("#tlog").scrollIntoView({ behavior: "smooth" }); }
+    if (k === "today") { Object.assign(TF, { p: "1", st: "", ch: "" }); re(); return $("#tlog").scrollIntoView({ behavior: "smooth" }); }
+    if (k === "dlv") { Object.assign(TF, { st: "delivered" }); re(); return $("#tlog").scrollIntoView({ behavior: "smooth" }); }
+    document.querySelector(k === "new" ? ".tcol" : ".tc.due")?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  });
+  document.querySelectorAll("[data-tsend]").forEach(b => b.onclick = e => { e.stopPropagation(); const [p, s] = b.dataset.tsend.split("|"); openSend(p, Number(s)); });
+  document.querySelectorAll("#vTrack [data-open]").forEach(r => r.onclick = () => openEmail(r.dataset.open));
+}
+
+// ---------- 📊 summary: a rundown of the day / week / month (both flows) ----------
+// What was done, how much was collected, where everything stands now, and what is still open today.
+let SP = ["1", "7", "30"].includes(ls("sumP")) ? ls("sumP") : "1";
+const WA_C = "#16a34a", EM_C = "#4f46e5";                       // 💬 WhatsApp / 📧 email+SMS (validated pair)
+const dayKey = d => jday(d);
+function periodStart(p, back = 0){                               // start of the period (Israel days), "back" periods earlier
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })); d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - (Number(p) - 1) - back * Number(p));
+  return d;
+}
+const inP = (iso, a, b) => { const t = new Date(iso); return t >= a && (!b || t < b); };
+const sends = () => {                                             // one "send" = both channels of one stage to one customer
+  const g = {}; MSGS.forEach(m => { const k = m.phone + "|" + m.stage + "|" + m.at.slice(0, 16); (g[k] = g[k] || { phone: m.phone, stage: m.stage, at: m.at, ch: [] }).ch.push(m); });
+  return Object.values(g);
+};
+function stats(a, b){
+  const ev = WAEV.filter(e => inP(e.at, a, b));
+  const wa = ev.filter(e => !String(e.status).startsWith("שולם"));
+  const ss = sends().filter(s => inP(s.at, a, b)), ms = MSGS.filter(m => inP(m.at, a, b));
+  const pays = PAYS.filter(p => inP(p.paid_at, a, b) && p.amount > 0);
+  const touched = new Set([...wa.map(e => e.phone), ...ss.map(s => s.phone)]);
+  return { wa, ss, ms, pays, touched,
+    collected: pays.reduce((t, p) => t + p.amount - (p.refunded || 0), 0), commission: pays.reduce((t, p) => t + Number(p.commission || 0), 0),
+    incoming: ALLCASES.filter(c => c.latest && inP(c.latest, a, b)).length,
+    delivered: ms.filter(m => m.status === "delivered").length, failed: ms.filter(m => m.status === "failed").length };
+}
+const delta = (now, before, money) => {
+  if (!before && !now) return `<small class="mute">&nbsp;</small>`;
+  const d = now - before, t = money ? ils(Math.abs(d)) : Math.abs(d);
+  return `<small class="${d > 0 ? "up" : d < 0 ? "dn" : "mute"}">${d > 0 ? "▲ " + t : d < 0 ? "▼ " + t : "ללא שינוי"} לעומת ${SP === "1" ? "אתמול" : SP === "7" ? "השבוע הקודם" : "החודש הקודם"}</small>`;
+};
+// grouped bars: one column per day (or per hour for "today"); thin bars, 4px rounded tops, hover tooltip
+function barChart(id, buckets, series, fmtV){
+  const max = Math.max(1, ...buckets.flatMap(b => series.map(s => b[s.k])));
+  const nice = (() => { const p = Math.pow(10, Math.floor(Math.log10(max))), m = max / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; })();
+  const every = buckets.length > 16 ? 5 : buckets.length > 10 ? 2 : 1;
+  return `<div class="ch" id="${id}">
+    <div class="chy">${[nice, nice / 2, 0].map(v => `<span>${Number.isInteger(v) || v >= 10 ? fmtV(v) : ""}</span>`).join("")}</div>
+    <div class="chp">${[0, 50, 100].map(y => `<i class="gl" style="bottom:${y}%"></i>`).join("")}
+      ${buckets.map((b, i) => `<div class="cc" data-tip="${esc(b.label)}|${series.map(s => s.n + ": " + fmtV(b[s.k])).join("|")}">
+        <div class="cb">${series.map(s => `<i style="height:${b[s.k] ? Math.max(2, b[s.k] / nice * 100) : 0}%;background:${s.c}"></i>`).join("")}</div>
+        <span class="cx">${i % every === 0 || i === buckets.length - 1 ? esc(b.short) : ""}</span></div>`).join("")}</div>
+  </div>`;
+}
+function buckets(){
+  if (SP === "1") {                                               // today: by hour, 08:00–21:00
+    return Array.from({ length: 14 }, (_, i) => 8 + i).map(h => ({ h, label: `היום ${String(h).padStart(2, "0")}:00`, short: String(h), wa: 0, em: 0, pay: 0 }));
+  }
+  return Array.from({ length: Number(SP) }, (_, i) => { const d = periodStart(SP); d.setDate(d.getDate() + i);
+    return { k: dayKey(d), label: d.toLocaleDateString("he-IL", { weekday: "short", day: "2-digit", month: "2-digit" }), short: d.toLocaleDateString("he-IL", { day: "numeric", month: "numeric" }), wa: 0, em: 0, pay: 0 }; });
+}
+function summary(){
+  const a = periodStart(SP), prevA = periodStart(SP, 1), S = stats(a), P = stats(prevA, a);
+  const B = buckets(), hr = iso => Number(new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Jerusalem", hour: "numeric", hourCycle: "h23" }));
+  const put = (iso, k, v = 1) => { const b = SP === "1" ? B.find(x => x.h === Math.min(21, Math.max(8, hr(iso)))) : B.find(x => x.k === dayKey(iso)); if (b) b[k] += v; };
+  S.wa.forEach(e => put(e.at, "wa")); S.ss.forEach(s => put(s.at, "em")); S.pays.forEach(p => put(p.paid_at, "pay", p.amount - (p.refunded || 0)));
+  // what was done, per flow
+  const waMoves = ["נשלחה הודעה", "בתהליך", HOLD, DONE, "נשלח מכתב התראה", "סגור"].map(s => [s, S.wa.filter(e => e.status === s).length]);
+  const emStages = [1, 2, 3, 4].map(n => [n, S.ss.filter(s => s.stage === n).length]);
+  // where everything stands now (desk only = not paid)
+  const waNow = STATUSES.map(s => [s, CASES.filter(c => c.status === s).length]).filter(x => x[1]);
+  const T = CASES.map(c => ({ c, t: CMS_SEND.track(c, MSGS) }));
+  const emNow = [[STG[0], T.filter(x => x.t.stage === 0 && !x.t.closed && !x.t.waiting).length], ...[1, 2, 3, 4].map(n => [STG[n], T.filter(x => x.t.stage === n && !x.t.closed && !x.t.waiting).length]),
+    ["ממתינים / בהמתנה", T.filter(x => x.t.waiting).length], ["סגורים במייל", T.filter(x => x.t.closed).length]].filter(x => x[1]);
+  const hbars = (rows, color) => { const mx = Math.max(1, ...rows.map(r => r[1])); return rows.map(([t, n]) => `<div class="hb"><span class="hl">${esc(t)}</span><span class="ht"><i style="width:${n / mx * 100}%;background:${color}"></i></span><b>${n}</b></div>`).join("") || `<p class="mute">אין.</p>`; };
+  // still open today
+  const waDue = CASES.filter(c => next(c)), emDue = T.filter(x => x.t.manualDue && !x.t.closed);
+  // activity feed
+  const name = p => (ALLCASES.find(c => c.phone === p) || {}).name || local(p);
+  const feed = [
+    ...S.wa.map(e => ({ at: e.at, ic: "💬", who: e.phone, what: `וואטסאפ → ${e.status}${e.note ? " · " + e.note : ""}`, f: "wa" })),
+    ...S.ss.map(s => ({ at: s.at, ic: "📧", who: s.phone, what: `שלב ${s.stage} · ${CMS_T.NAMES[s.stage]} נשלח (${s.ch.map(m => m.channel === "email" ? "מייל" : "SMS").join(" + ")})${s.ch.some(m => m.status === "failed") ? " · ⚠ נכשל" : ""}`, f: "em" })),
+    ...S.pays.map(p => ({ at: p.paid_at, ic: "💰", who: p.phone, what: `שולם ${ils(p.amount)} ב-Stripe`, f: "pay" })),
+  ].sort((x, y) => y.at.localeCompare(x.at));
+  const lbl = { "1": "היום", "7": "7 הימים האחרונים", "30": "30 הימים האחרונים" }[SP];
+  $("#vSum").innerHTML = `
+    <div class="sumh"><h2>סיכום · ${lbl}</h2><span class="mute">${a.toLocaleDateString("he-IL")}${SP === "1" ? "" : " – " + new Date().toLocaleDateString("he-IL")}</span><span class="sp"></span>
+      <div class="seg" id="sp">${[["1", "היום"], ["7", "שבוע"], ["30", "חודש"]].map(([k, t]) => `<button data-sp="${k}" class="${k === SP ? "on" : ""}">${t}</button>`).join("")}</div></div>
+    <div class="kpis sk">
+      <div class="kpi main"><b>${ils(S.collected)}</b><span>נגבה (${S.pays.length} תשלומים)</span>${delta(S.collected, P.collected, true)}</div>
+      <div class="kpi"><b>${ils(S.commission)}</b><span>עמלה (20%)</span>${delta(S.commission, P.commission, true)}</div>
+      <div class="kpi"><b>${S.touched.size}</b><span>לקוחות שטופלו</span>${delta(S.touched.size, P.touched.size)}</div>
+      <div class="kpi"><b>${S.incoming}</b><span>תיקים חדשים שנכנסו</span>${delta(S.incoming, P.incoming)}</div>
+      <div class="kpi"><b>${S.wa.length}</b><span>💬 פעולות וואטסאפ</span>${delta(S.wa.length, P.wa.length)}</div>
+      <div class="kpi"><b>${S.ss.length}</b><span>📧 שליחות מייל + SMS</span><small class="mute">${S.ms.length ? Math.round(S.delivered * 100 / S.ms.length) + "% נמסרו" : "&nbsp;"}${S.failed ? ` · <span class="er">${S.failed} נכשלו</span>` : ""}</small></div>
+    </div>
+    <div class="sg2">
+      <div class="card sc"><div class="sch"><h3>פעילות ${SP === "1" ? "לפי שעה" : "לפי יום"}</h3>
+        <span class="lg"><i style="background:${WA_C}"></i>💬 וואטסאפ</span><span class="lg"><i style="background:${EM_C}"></i>📧 מייל + SMS</span></div>
+        ${barChart("cha", B, [{ k: "wa", n: "💬 וואטסאפ", c: WA_C }, { k: "em", n: "📧 מייל + SMS", c: EM_C }], v => String(Math.round(v)))}</div>
+      <div class="card sc"><div class="sch"><h3>נגבה ${SP === "1" ? "לפי שעה" : "לפי יום"}</h3></div>
+        ${barChart("chp", B, [{ k: "pay", n: "נגבה", c: EM_C }], v => ils(v))}</div>
+    </div>
+    <div class="sg2">
+      <div class="card sc"><div class="sch"><h3>💬 מה נעשה בוואטסאפ</h3><span class="mute">${S.wa.length} פעולות</span></div>${hbars(waMoves.filter(x => x[1]), WA_C)}</div>
+      <div class="card sc"><div class="sch"><h3>📧 מה נשלח במייל + SMS</h3><span class="mute">${S.ss.length} שליחות</span></div>${hbars(emStages.map(([n, v]) => [`שלב ${n} · ${CMS_T.NAMES[n]}`, v]).filter(x => x[1]), EM_C)}</div>
+    </div>
+    <div class="sg2">
+      <div class="card sc"><div class="sch"><h3>💬 איפה כל התיקים עומדים עכשיו · וואטסאפ</h3><span class="mute">${CASES.length} בשולחן</span></div>${hbars(waNow, WA_C)}</div>
+      <div class="card sc"><div class="sch"><h3>📧 איפה כל התיקים עומדים עכשיו · מייל/SMS</h3></div>${hbars(emNow, EM_C)}</div>
+    </div>
+    <div class="sg2">
+      <div class="card sc"><div class="sch"><h3>עדיין פתוח לטיפול היום</h3></div>
+        <div class="due2">
+          <div><b class="big">${waDue.length}</b> 💬 בוואטסאפ ${waDue.slice(0, 6).map(c => `<button class="dl" data-wa="${c.phone}"><b>${esc(c.name)}</b><span>${esc(next(c))}</span></button>`).join("")}
+            <button class="btn sm" id="goall">לוואטסאפ ←</button></div>
+          <div><b class="big">${emDue.length}</b> 📧 במייל/SMS ${emDue.slice(0, 6).map(({ c, t }) => `<button class="dl" data-em="${c.phone}"><b>${esc(c.name)}</b><span>לשלוח שלב ${t.next} · ${CMS_T.NAMES[t.next]}</span></button>`).join("")}
+            <button class="btn sm" id="gotrack">למייל / SMS ←</button></div>
+        </div></div>
+      <div class="card sc"><div class="sch"><h3>יומן פעילות</h3><span class="mute">${feed.length} פעולות</span></div>
+        <div class="feed">${feed.slice(0, 60).map(x => `<div class="fi" data-${x.f === "em" ? "em" : "wa"}="${x.who}"><span class="fic">${x.ic}</span><div><b>${esc(name(x.who))}</b> · ${esc(x.what)}</div>
+          <span class="mute">${new Date(x.at).toLocaleString("he-IL", SP === "1" ? { hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></div>`).join("") || `<p class="mute">אין פעילות בתקופה הזו.</p>`}</div></div>
+    </div>`;
+  document.querySelectorAll("[data-sp]").forEach(b => b.onclick = () => { SP = b.dataset.sp; ls("sumP", SP); summary(); });
+  const toAll = phone => { document.querySelector('.tab[data-v="all"]').click(); if (phone) { if (CASES.find(c => c.phone === phone)) openCase(phone); else toast("התיק שולם ואומת, ולכן כבר לא בשולחן"); } };
+  $("#goall").onclick = () => toAll(); $("#gotrack").onclick = () => document.querySelector('.tab[data-v="track"]').click();
+  document.querySelectorAll("#vSum [data-wa]").forEach(b => b.onclick = () => toAll(b.dataset.wa));
+  document.querySelectorAll("#vSum [data-em]").forEach(b => b.onclick = () => openEmail(b.dataset.em));
+  // hover tooltip on the charts
+  const tip = $("#ctip");
+  document.querySelectorAll("#vSum .cc").forEach(col => {
+    col.onmouseenter = () => { const [h, ...rows] = col.dataset.tip.split("|"); tip.innerHTML = `<b>${h}</b>` + rows.map(r => `<div>${r}</div>`).join(""); tip.style.display = "block"; };
+    col.onmousemove = e => { tip.style.left = Math.min(innerWidth - tip.offsetWidth - 8, e.clientX + 12) + "px"; tip.style.top = (e.clientY + 12) + "px"; };
+    col.onmouseleave = () => tip.style.display = "none";
+  });
+}
+
+// visual only: color the current status button by its status
+new MutationObserver(() => document.querySelectorAll(".steps .btn.p").forEach(b => { const k = b.dataset.st || b.dataset.est; if (k && COLC[k]) b.style.setProperty("--sc", COLC[k]); }))
+  .observe(document.body, { childList: true, subtree: true });
+
+// ---------- 👥 customers: customer details only, grouped by the day they came in ----------
+// "Came in" = created_at when the server has it, otherwise the dispute date (latest). No flow statuses here.
+let CF = { q: "", r: ["7", "30", "90", ""].includes(ls("custR")) ? ls("custR") : "30", open: null, hf: "" };
+// customers page only: ONE timeline with both flows together (WhatsApp + email + SMS + payments).
+// Everywhere else the two flows stay apart.
+function timeline(c){
+  const items = [
+    ...WAEV.filter(e => e.phone === c.phone && !String(e.status).startsWith("שולם")).map(e => ({ at: e.at, f: "wa", tag: "💬 וואטסאפ", what: e.status, note: e.note })),
+    ...Object.values(MSGS.filter(m => m.phone === c.phone).reduce((g, m) => { const k = m.stage + "|" + m.at.slice(0, 16); (g[k] = g[k] || []).push(m); return g; }, {}))
+      .map(g => ({ at: g[0].at, f: "em", tag: "📧 מייל + SMS", what: `שלב ${g[0].stage} · ${CMS_T.NAMES[g[0].stage]}`,
+        note: g.map(m => `${m.channel === "email" ? "מייל" : "SMS"}: ${MST[m.status][0]}${m.error ? " (" + m.error + ")" : ""}`).join(" · "), bad: g.some(m => m.status === "failed") })),
+    ...CEV.filter(e => e.phone === c.phone && !String(e.note || "").startsWith("📧💬")).map(e => ({ at: e.at, f: "em", tag: "📧 מייל + SMS", what: "סטטוס: " + e.status, note: e.note, bad: String(e.note || "").includes("⚠") })),
+    ...PAYS.filter(p => p.phone === c.phone && p.amount > 0).map(p => ({ at: p.paid_at, f: "pay", tag: "💰 תשלום", what: `שולם ${ils(p.amount)}`, note: "אומת ב-Stripe" })),
+  ].filter(x => !CF.hf || x.f === CF.hf || x.f === "pay").sort((a, b) => b.at.localeCompare(a.at));
+  return `<div class="tlh"><b>היסטוריית הודעות</b>
+      <span class="tlst">💬 וואטסאפ: <b>${esc(c.status)}</b></span><span class="tlst em">📧 מייל/SMS: <b>${esc(c.email_status || "חדש")}</b></span><span class="sp"></span>
+      <span class="tlf">${[["", "הכל"], ["wa", "💬 וואטסאפ"], ["em", "📧 מייל + SMS"]].map(([k, t]) => `<button data-hf="${k}" class="${k === CF.hf ? "on" : ""}">${t}</button>`).join("")}</span></div>
+    <div class="tli">${items.map(x => `<div class="ti ${x.f} ${x.bad ? "bad" : ""}"><span class="tg">${x.tag}</span><div><b>${esc(x.what)}</b>${x.note ? `<div class="mute">${esc(x.note)}</div>` : ""}</div>
+      <span class="mute">${new Date(x.at).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></div>`).join("") || `<p class="mute">עוד לא נשלחו הודעות ללקוח הזה.</p>`}</div>`;
+}
+const VARL = { sent: "נשלח", delivered: "נשלח ונמסר", fraud: "בעל כרטיס אחר" };
+const cameIn = c => c.created_at || c.latest;
+function dayTitle(k){
+  const t = jday(Date.now()), y = jday(Date.now() - 864e5);
+  const d = new Date(k + "T12:00:00");
+  const full = d.toLocaleDateString("he-IL", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
+  return k === t ? `היום <span class="mute">· ${full}</span>` : k === y ? `אתמול <span class="mute">· ${full}</span>` : full;
+}
+function customers(){
+  const from = CF.r ? Date.now() - Number(CF.r) * 864e5 : 0;
+  const list = ALLCASES.filter(c => cameIn(c) && new Date(cameIn(c)) >= from).filter(c => !CF.q || hit(c, CF.q.toLowerCase()))
+    .sort((a, b) => cameIn(b).localeCompare(cameIn(a)));
+  const days = {}; list.forEach(c => (days[jday(cameIn(c))] = days[jday(cameIn(c))] || []).push(c));
+  const keys = Object.keys(days).sort().reverse();
+  const today = (days[jday(Date.now())] || []).length;
+  const tm = iso => new Date(iso).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  const row = c => `<div class="cu ${CF.open === c.phone ? "op" : ""}" data-cu="${c.phone}">
+      <div class="cu1">
+        <span class="ct">${tm(cameIn(c))}</span>
+        <div class="cn"><b>${esc(c.name)}</b><span class="mute">${esc(c.case_type || "")}${c.kind === "sub" ? " · מנוי" : ""}</span></div>
+        <span class="cph" dir="ltr">${esc(local(c.phone))}</span>
+        <span class="cem">${c.email ? esc(c.email) : `<span class="wn">אין מייל</span>`}</span>
+        <span class="cor">${esc(c.orders_label || "")}</span>
+        <b class="cam">${esc(c.total)}${isPaid(c) ? ` <span class="chip ok">שולם</span>` : ""}</b>
+      </div>
+      ${CF.open === c.phone ? `<div class="cu2">
+        <div><span class="k">כתובת</span>${esc(c.address || "")}</div>
+        <div><span class="k">סוג תיק</span>${esc(VARL[c.variant] || c.variant || "")}</div>
+        <div><span class="k">נכנס</span>${new Date(cameIn(c)).toLocaleString("he-IL")}</div>
+        <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.email ? `<button class="btn sm" data-copy="${esc(c.email)}">📋 העתק מייל</button>` : ""}${c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}</div>
+        ${(c.orders || []).map(o => `<div class="order"><b>${esc(o.order)}</b> · ${esc(o.order_date)} · ${esc(o.amount)}<br><span class="mute">${esc(o.products)}</span>
+          ${o.shipments.map(s => `<br>${esc(s.carrier)} <span dir="ltr">${esc(s.tracking)}</span> · <b>${esc(s.status)}</b>${s.date ? " · " + esc(s.date) : ""}`).join("")}</div>`).join("")}
+        <div class="tl2">${timeline(c)}</div>
+      </div>` : ""}
+    </div>`;
+  $("#vCust").innerHTML = `
+    <div class="sumh"><h2>👥 לקוחות</h2><span class="mute">${list.length} לקוחות · ${keys.length} ימים${today ? ` · <b class="okk">🆕 ${today} נכנסו היום</b>` : ""}</span><span class="sp"></span>
+      <input id="cq" class="cq" placeholder="🔍 שם / טלפון / 4 ספרות / הזמנה / מייל" value="${esc(CF.q)}">
+      <div class="seg" id="cr">${[["7", "שבוע"], ["30", "חודש"], ["90", "3 חודשים"], ["", "הכל"]].map(([k, t]) => `<button data-cr="${k}" class="${k === CF.r ? "on" : ""}">${t}</button>`).join("")}</div></div>
+    <div class="card cl">
+      <div class="cu cuh"><div class="cu1"><span class="ct">שעה</span><span class="cn">לקוח</span><span class="cph">טלפון</span><span class="cem">מייל</span><span class="cor">הזמנה</span><span class="cam">סכום</span></div></div>
+      ${keys.map(k => `<div class="dg"><div class="dh"><b>${dayTitle(k)}</b><span class="sp"></span><span class="dc">${days[k].length} לקוחות</span><span class="ds">${ils(days[k].reduce((t, c) => t + c.amount / 100, 0))}</span></div>
+        ${days[k].map(row).join("")}</div>`).join("") || `<div class="empty">אין לקוחות בטווח הזה.</div>`}
+    </div>`;
+  $("#cq").oninput = e => { CF.q = e.target.value; customers(); const i = $("#cq"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+  document.querySelectorAll("[data-cr]").forEach(b => b.onclick = () => { CF.r = b.dataset.cr; ls("custR", CF.r); customers(); });
+  document.querySelectorAll("#vCust [data-copy]").forEach(b => b.onclick = e => { e.stopPropagation(); navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
+  document.querySelectorAll("#vCust [data-hf]").forEach(b => b.onclick = e => { e.stopPropagation(); CF.hf = b.dataset.hf; customers(); });
+  document.querySelectorAll("#vCust .cu[data-cu]").forEach(r => r.querySelector(".cu1").onclick = () => { CF.open = CF.open === r.dataset.cu ? null : r.dataset.cu; customers(); });
+}
+
+// ---------- payroll ----------
+function payroll(){
+  const months = [...new Set(PAYS.filter(p => p.commissionable).map(p => p.month))].sort().reverse();
+  const cur = ym(today());
+  if (!months.includes(cur)) months.unshift(cur);
+  const rows = months.map(m => {
+    const ps = PAYS.filter(p => p.month === m && p.commissionable), po = PAYOUTS.find(o => o.month === m);
+    const [y, mo] = m.split("-").map(Number), pay = new Date(y, mo, 10);
+    return { m, n: ps.filter(p => p.amount > 0).length, col: ps.reduce((s, p) => s + p.amount - p.refunded, 0), com: ps.reduce((s, p) => s + Number(p.commission), 0), pay, po };
+  });
+  $("#vPay").innerHTML = `
+    <h2>עמלות ושכר</h2>
+    <p class="mute">20% מכל תשלום שאומת ב-Stripe על תיק שעודכן לפני התשלום או עד 48 שעות אחריו. חודש נסגר לפי תאריך התשלום, ומשולם ב-10 לחודש שאחריו. תשלום שהוחזר או הוכחש מקוזז.</p>
+    <div class="tbl"><table><tr><th>חודש</th><th>תשלומים</th><th>נגבה נטו</th><th>עמלה</th><th>מועד תשלום</th><th>סטטוס</th><th></th></tr>
+    ${rows.map(r => `<tr><td>${r.m}</td><td>${r.n}</td><td>${ils(r.col)}</td><td><b>${ils(r.com)}</b></td><td>${dmy(r.pay)}</td>
+      <td>${r.po ? `<span class="chip ok">שולם ${dmy(new Date(r.po.paid_at))}${r.po.ref ? " · " + esc(r.po.ref) : ""}</span>` : r.m === cur ? `<span class="chip">חודש פתוח</span>` : `<span class="chip warn">ממתין לתשלום</span>`}</td>
+      <td><button class="btn" data-csv="${r.m}">פירוט CSV</button>${boss() && !r.po && r.m !== cur ? ` <button class="btn g" data-pay="${r.m}">סמן כשולם</button>` : ""}</td></tr>`).join("")}
+    </table></div>
+    <h3>תשלומים אחרונים</h3>
+    <div class="tbl"><table><tr><th>תאריך</th><th>לקוח</th><th>סכום</th><th>הוחזר</th><th>עמלה</th><th>חודש</th></tr>
+    ${PAYS.filter(p => p.commissionable).slice(0, 50).map(p => { const c = CASES.find(x => x.phone === p.phone) || {}; return `<tr><td>${dmy(new Date(p.paid_at))}</td><td>${esc(c.name || p.phone)}</td>
+      <td>${ils(p.amount)}</td><td>${p.refunded ? ils(p.refunded) : ""}</td><td>${p.commissionable ? ils(p.commission) : "ללא"}</td><td>${p.month}</td></tr>`; }).join("")}</table></div>`;
+  document.querySelectorAll("[data-csv]").forEach(b => b.onclick = () => csv(b.dataset.csv));
+  document.querySelectorAll("[data-pay]").forEach(b => b.onclick = async () => {
+    const ref = prompt("אסמכתא / מספר העברה (לא חובה)") ?? "";
+    const { error } = await SB.rpc("coll_mark_payout", { p_month: b.dataset.pay, p_ref: ref });
+    if (error) return toast(error.message); toast("סומן כשולם"); await load();
+  });
+}
+function csv(m){
+  const ps = PAYS.filter(p => p.month === m && p.commissionable);
+  const lines = [["תאריך","לקוח","טלפון","סכום","הוחזר","נטו","עמלה","מזהה Stripe"]].concat(ps.map(p => {
+    const c = CASES.find(x => x.phone === p.phone) || {};
+    return [dmy(new Date(p.paid_at)), c.name || "", local(p.phone), p.amount, p.refunded, p.amount - p.refunded, p.commission, p.id];
+  }));
+  lines.push(["סה\"כ","","","","", ps.reduce((s, p) => s + p.amount - p.refunded, 0), ps.reduce((s, p) => s + Number(p.commission), 0), ""]);
+  const blob = new Blob(["﻿" + lines.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n")], {type: "text/csv"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `עמלות גבייה ${m}.csv`; a.click();
+}
+start();
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
-// COPY of cms/templates.js, written by build_real.py. Do not edit here: edit the CMS project's templates.js and run build_real.py.
+// Smiley CMS · templates.js: THE source of the email/SMS texts. Used by the Edge Functions and the demo (cms-demo/).
+// After editing, run:  python supabase/sync_index.py   (copies it into index.html, which must stay one file).
 // CMS · Collection Messaging Service · message templates
 // ONE source for the email (HTML + plain text) and the SMS of every stage.
 // Pure functions, no page / DOM: the same file moves into the Supabase Edge Function later.
