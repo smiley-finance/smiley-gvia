@@ -42,3 +42,9 @@ Manager actions (marking a month's commission as paid) are checked on the server
 - No new external scripts except from `cdn.jsdelivr.net` / `cdnjs.cloudflare.com` with a pinned version.
 - Don't send data anywhere except Supabase. No analytics or trackers.
 - Test on your branch before opening the PR.
+
+## Email + SMS (CMS)
+A second flow next to WhatsApp, in the tab "📧 מייל / SMS": stage 1 is sent by the agent, stages 2–4 go out automatically (day 3, day 8 with the letter, 11 days after the letter), Sunday–Thursday 08:00–20:00 only, never on Shabbat or chagim.
+It has its own status and history (`cms_cases`, `cms_events`, `cms_messages`); the WhatsApp status is never changed by it. The page's only write for it is the RPC `cms_set_status`; sending is done by the Supabase Edge Function `cms-send`.
+Server side (SQL, functions, setup steps, rollback): `supabase/README.md`. Nothing is sent while the `CMS_SENDING` secret is not `on`.
+

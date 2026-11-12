@@ -1,0 +1,12 @@
+# Only the CMS functions' settings. Merge into the project's own config.toml if it has one.
+# cms-send:   checks the logged-in agent itself (or the scheduler's secret header), so the gateway check is off.
+# cms-report: called by the SMS provider (no Supabase login), checked with WEBHOOK_SECRET instead.
+# cms-health: agents only, the gateway checks the login.
+[functions.cms-send]
+verify_jwt = false
+
+[functions.cms-report]
+verify_jwt = false
+
+[functions.cms-health]
+verify_jwt = true
