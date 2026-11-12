@@ -18,7 +18,7 @@ Built to fit how the desk works today:
 | `functions/_shared` | `templates.js` + `send.js`: the same texts and rules that are inside `index.html`. Change both together. |
 
 ## Timer and window (same as the page)
-Stage 1 is the agent's click. Then stage 2 goes out on day 3, stage 3 (the letter, PDF from `coll-letters`) on day 8, and stage 4 eleven days after the letter.
+Stage 1 is the agent's click. Then stage 2 goes out on day 3, stage 3 (the letter, PDF from `coll-letters`) on day 8, and stage 4 on day 11 (all counted from stage 1).
 Sending only happens Sunday–Thursday, 08:00–20:00 Israel time. Nothing goes out on Friday, Saturday, chagim or Yom HaZikaron/HaAtzmaut, or after 13:00 on a chag eve.
 `בתהליך`, `בבדיקה/המתנה` and `בוצע – ממתין לאימות` pause the timer. A payment verified in Stripe ends it.
 
