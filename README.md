@@ -13,7 +13,7 @@ Everything is in one file, `index.html` (HTML + CSS + JS, Hebrew, RTL). There is
 4. It goes live only after Yair approves and merges it. Direct pushes to `main` are blocked.
 
 ## What the page talks to
-- Supabase project `tlxuqxlqzcpelcfdtjax`, with the **anon** key that is already in the file (it is public by design). Never put any other key in this repo.
+- Supabase project `pqlfvflccwccgsakovcj`, with the **anon** key that is already in the file (it is public by design). Never put any other key in this repo.
 - Login = Supabase Auth (email + password). Accounts are created by Yair only.
 
 Data you can **read** (logged in):
