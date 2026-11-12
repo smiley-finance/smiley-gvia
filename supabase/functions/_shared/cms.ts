@@ -109,8 +109,8 @@ export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
         // email: "delivered" = accepted by Gmail. A bounce comes back to the collections@ inbox later.
         await sb.from("cms_messages").update({ status: "delivered", provider_id: id, updated_at: new Date().toISOString() }).eq("id", r.id);
       } else {
-        await sendSms(c.phone, m.sms, r.id);                   // SMS: "sent" until the provider's delivery report (cms-report)
-        await sb.from("cms_messages").update({ status: "sent", provider_id: String(r.id), updated_at: new Date().toISOString() }).eq("id", r.id);
+        const pid = await sendSms(c.phone, m.sms, r.id);       // SMS: "sent" until Sendy's delivery report (cms-report)
+        await sb.from("cms_messages").update({ status: "sent", provider_id: pid, updated_at: new Date().toISOString() }).eq("id", r.id);
       }
       sent.push(r.channel);
     } catch (e) {

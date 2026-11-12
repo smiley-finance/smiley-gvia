@@ -3,7 +3,7 @@
 // Sends nothing. Logged-in agents only (the gateway checks the login, see config.toml).
 import { admin, json, testMode, sendingOn, R } from "../_shared/cms.ts";
 import { emailReady, emailCheck } from "../_shared/email.ts";
-import { smsReady } from "../_shared/sms.ts";
+import { smsReady, smsCheck } from "../_shared/sms.ts";
 
 const t = (iso?: string | null) => iso ? new Date(iso).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" }) : "";
 
@@ -26,7 +26,12 @@ Deno.serve(async (req) => {
     try { await emailCheck(); systems.push({ key: "email", name: "מייל · Google Workspace", state: "ok", ms: Math.round(performance.now() - t0), detail: "מחובר ל-Gmail" }); }
     catch (e) { systems.push({ key: "email", name: "מייל · Google Workspace", state: "err", detail: "ההתחברות ל-Gmail נכשלה: " + String((e as Error).message || e).slice(0, 120) }); }
   }
-  systems.push({ key: "sms", name: "SMS · ספק ישראלי", state: smsReady() ? "ok" : "off", detail: smsReady() ? "מוגדר" : "לא מוגדר", need: smsReady() ? undefined : "SMS_PROVIDER + SMS_USER + SMS_TOKEN" });
+  if (!smsReady()) systems.push({ key: "sms", name: "SMS · Sendy", state: "off", detail: "לא מוגדר", need: "SMS_PROVIDER=sendy + SMS_TOKEN + SMS_SENDER" });
+  else {
+    t0 = performance.now();
+    try { systems.push({ key: "sms", name: "SMS · Sendy", state: "ok", ms: Math.round(performance.now() - t0), detail: await smsCheck() }); }
+    catch (e) { systems.push({ key: "sms", name: "SMS · Sendy", state: "err", detail: String((e as Error).message || e).slice(0, 160) }); }
+  }
 
   // delivery reports: the last SMS report we got
   const { data: rep } = await sb.from("cms_messages").select("updated_at").eq("channel", "sms").in("status", ["delivered", "failed"]).order("updated_at", { ascending: false }).limit(1);
