@@ -248,7 +248,7 @@ const HOLD = "בבדיקה/המתנה";                                  // PROP
 const STATUSES = ["חדש","נשלחה הודעה","בתהליך",HOLD,"בוצע – ממתין לאימות","נשלח מכתב התראה","סגור"];
 const DONE = "בוצע – ממתין לאימות";
 const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
-let ME = null, ADMIN = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "queue", SEL = null;
+let ME = null, ADMIN = false, EARNS = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "queue", SEL = null;
 let PTAB = "msgs", LIST = [];                                   // design only: open tab inside the case panel, order of the list on screen
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -287,7 +287,8 @@ async function start(){
   const { data } = await SB.auth.getSession();
   if (!data.session){ $("#login").classList.remove("hide"); return; }
   ME = data.session.user.email; $("#who").textContent = ME;
-  const a = await SB.from("coll_admins").select("email").eq("email", ME); ADMIN = !!(a.data && a.data.length);
+  const a = await SB.from("coll_admins").select("email, earns").eq("email", ME); ADMIN = !!(a.data && a.data.length);
+  EARNS = !!(ADMIN && a.data[0].earns);                         // a manager who also works cases: his clicks still earn commission
   $("#app").classList.remove("hide"); $("#login").classList.add("hide");
   if (ADMIN){
     AGENT_VIEW = ls("agentView") === "1";
@@ -304,7 +305,7 @@ async function start(){
   setInterval(upd, 30e3);
 }
 function mode(){
-  $("#banner").classList.toggle("hide", !(ADMIN && AGENT_VIEW));
+  $("#banner").classList.toggle("hide", !(ADMIN && AGENT_VIEW && !EARNS));
   if ($("#av")) $("#av").textContent = AGENT_VIEW ? "חזרה למצב מנהל" : "מצב עובד";
 }
 $("#go").onclick = async () => {
@@ -581,7 +582,7 @@ function openCase(phone, keepScroll){
     const c = CASES.find(x => x.phone === phone); if (!c) return;   // the background refresh may have replaced the objects
     const before = { ...c }, now = new Date().toISOString();
     Object.assign(c, { status: st, last_action_at: now, done_at: st === DONE ? now : c.done_at,
-                       agent_touched_at: c.agent_touched_at || (st !== "חדש" && !ADMIN ? now : null) });
+                       agent_touched_at: c.agent_touched_at || (st !== "חדש" && (!ADMIN || EARNS) ? now : null) });
     (EVENTS[phone] = EVENTS[phone] || []).unshift({ status: st, at: now });
     // undo = the same status call with the previous status (a misclick can be taken back for a few seconds)
     toast((isUndo ? "הוחזר ל: " : "סטטוס: ") + st, isUndo || before.status === st ? null : () => save(before.status, true));
