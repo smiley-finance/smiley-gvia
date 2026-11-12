@@ -35,6 +35,7 @@ export const testMode = TEST_TO.length > 0;
 // MAIN SWITCH: nothing is ever sent unless the secret CMS_SENDING is exactly "on". Not set = connected, but silent.
 export const sendingOn = env("CMS_SENDING") === "on";
 const allowed = (to: string) => !testMode || TEST_TO.includes(String(to).toLowerCase());
+export const isTestRecipient = (to: string) => testMode && TEST_TO.includes(String(to || "").toLowerCase());
 
 // the logged-in agent behind a request (null = not logged in)
 export async function agent(sb: SupabaseClient, req: Request): Promise<string | null> {

@@ -3,7 +3,7 @@
 // 2. The scheduler (pg_cron, every 15 min):  POST {"auto": true} with header x-cms-cron = CRON_SECRET
 //    -> sends every stage 2-4 that is due now, inside the window (Sun-Thu 08:00-20:00 Israel time, no holidays).
 // Every send runs the same rules as the dashboard (send.js plan()), so the server can't be talked into skipping one.
-import { admin, agent, json, loadCase, loadLog, loadOpenCases, R, sendStage, env, testMode, sendingOn } from "../_shared/cms.ts";
+import { admin, agent, json, loadCase, loadLog, loadOpenCases, R, sendStage, env, testMode, sendingOn, isTestRecipient } from "../_shared/cms.ts";
 
 const MAX_PER_RUN = 40;                                       // stays well inside the function time limit; the rest go next run
 
@@ -13,6 +13,23 @@ Deno.serve(async (req) => {
   const sb = admin(), now = new Date();
   // deno-lint-ignore no-explicit-any
   const body: any = await req.json().catch(() => ({}));
+
+  // ---------- TEST ONLY: run one stage (or the timer) for a test customer, any day/hour ----------
+  // Allowed only with the server's own key (x-cms-cron), only in test mode, and only when BOTH the customer's
+  // email and phone are in CMS_TEST_TO. Real customers can never pass this check.
+  if (body.test) {
+    if (!env("CRON_SECRET") || req.headers.get("x-cms-cron") !== env("CRON_SECRET")) return json(req, { ok: false, error: "forbidden" }, 403);
+    if (!testMode) return json(req, { ok: false, error: "test mode is off (CMS_TEST_TO)" }, 403);
+    const c = await loadCase(sb, String(body.phone || ""));
+    if (!c) return json(req, { ok: false, error: "no such case" }, 404);
+    if (!isTestRecipient(c.email) || !isTestRecipient(c.phone)) return json(req, { ok: false, error: "not a test customer" }, 403);
+    const log = await loadLog(sb, c.phone);
+    // deno-lint-ignore no-explicit-any
+    const pick = body.stage ? { stage: Number(body.stage), auto: false } : (R.autoPick([c], log, now, { ignoreQuiet: true })[0] as any);
+    if (!pick) return json(req, { ok: true, note: "timer: nothing due for this customer", track: R.track(c, log, now) });
+    const r = await sendStage(sb, c, pick.stage, { log, now, auto: !body.stage, by: "test", ignoreQuiet: true });
+    return json(req, { ...r, timer: !body.stage });
+  }
 
   // ---------- the scheduler ----------
   if (body.auto) {
