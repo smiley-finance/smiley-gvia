@@ -15,7 +15,7 @@ export const env = (k: string) => Deno.env.get(k) ?? "";
 export const admin = () => createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
 
 // the dashboard runs on GitHub Pages (+ local preview); only those origins may call the functions from a browser
-const ORIGINS = (env("CMS_ORIGINS") || "https://yairecom.github.io,http://localhost:8000,https://raw.githack.com").split(",").map(s => s.trim());
+const ORIGINS = (env("CMS_ORIGINS") || "https://smiley-finance.github.io,https://yairecom.github.io,http://localhost:8000,https://raw.githack.com").split(",").map(s => s.trim());
 export function cors(req: Request): Record<string, string> {
   const o = req.headers.get("origin") || "";
   return {
@@ -106,8 +106,8 @@ export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
           if (e || !pdf) throw new Error("לא הצלחתי לצרף את מכתב ההתראה");
           attachments.push({ filename: m.attach || "מכתב התראה.pdf", content: new Uint8Array(await pdf.arrayBuffer()), contentType: "application/pdf" });
         }
-        const id = await sendEmail({ to: c.email, subject: m.subject, html: m.html, text: m.text, attachments });
-        // email: "delivered" = accepted by Gmail. A bounce comes back to the collections@ inbox later.
+        const id = await sendEmail({ to: c.email, subject: m.subject, html: m.html, text: m.text, attachments, id: r.id });
+        // email: "delivered" = accepted by Gmail. If it bounces later, cms-bounce finds the bounce in the collections@ inbox and sets "bounced".
         await sb.from("cms_messages").update({ status: "delivered", provider_id: id, updated_at: new Date().toISOString() }).eq("id", r.id);
       } else {
         const pid = await sendSms(c.phone, m.sms, r.id);       // SMS: "sent" until Sendy's delivery report (cms-report)
