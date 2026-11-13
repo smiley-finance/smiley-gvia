@@ -223,7 +223,7 @@
 //
 // ctx = { log: [messages of this case], now: Date, ignoreQuiet: bool (test only) }
 // log rows look like the planned table cms_messages:
-//   { id, phone, stage, channel: "email"|"sms", to, subject, body, due, status: "queued"|"sent"|"delivered"|"failed", error, at }
+//   { id, phone, stage, channel: "email"|"sms", to, subject, body, due, status: "queued"|"sent"|"delivered"|"failed"|"bounced", error, at }
 (function (root) {
   const T = root.CMS_T;
   const DONE = "בוצע – ממתין לאימות", HOLD = "בבדיקה/המתנה";
@@ -324,7 +324,7 @@
     if (!email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
     if (!sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
     if (!email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
-    if (log.some(m => m.channel === "email" && m.status === "failed")) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
+    if (log.some(m => m.channel === "email" && (m.status === "failed" || m.status === "bounced"))) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
 
     const due = dueFor(c, stage, log, now);
     const msg = T.render(c, stage, { due, hasEmail: email, now });
@@ -366,7 +366,7 @@
       lastAt: last ? new Date(last.at) : null,
       email: (lastStage.find(m => m.channel === "email") || {}).status || null,     // delivery of the last stage, per channel
       sms: (lastStage.find(m => m.channel === "sms") || {}).status || null,
-      failed: log.some(m => m.status === "failed"),
+      failed: log.some(m => m.status === "failed" || m.status === "bounced"),
       closed, waiting, talking, status: st, count: log.length,
     };
   }
@@ -1435,7 +1435,7 @@ function openCase(phone, keepScroll){
 // ---------- CMS: send a stage by email + SMS ----------
 // The window shows exactly what goes out, to whom, and every rule check. "שלח" calls the server (cms_send),
 // which checks the same rules again, logs the messages, moves the status and later reports delivery.
-const CH = { email: "📧 מייל", sms: "💬 SMS" }, MST = { queued: ["בתור", ""], sent: ["נשלח", "warn"], delivered: ["נמסר", "ok"], failed: ["נכשל", "bad"] };
+const CH = { email: "📧 מייל", sms: "💬 SMS" }, MST = { queued: ["בתור", ""], sent: ["נשלח", "warn"], delivered: ["נמסר", "ok"], failed: ["נכשל", "bad"], bounced: ["חזר", "bad"] };
 // ---------- CMS: the email/SMS case panel (a drawer of its own; the WhatsApp panel is not used here) ----------
 // Same customer details as WhatsApp. Its OWN status (email_status) and history (cms_events), changed only here.
 const ESTAT = ["נשלחה הודעה", "בתהליך", HOLD, DONE, "נשלח מכתב התראה", "סגור"];
@@ -1582,7 +1582,7 @@ conn(); setInterval(conn, 60e3);
 
 // ---------- CMS: tracking tab (where every customer stands + every email / SMS we sent) ----------
 const STG = ["ממתינים לפנייה ראשונה", "שלב 1 · פנייה ראשונה", "שלב 2 · תזכורת", "שלב 3 · מכתב התראה", "שלב 4 · תזכורת אחרונה"];
-const DLV = s => s === "delivered" ? `<span class="okk" title="נמסר">✓</span>` : s === "failed" ? `<span class="er" title="נכשל">✕</span>` : s ? `<span class="wn" title="נשלח, ממתין לאישור מסירה">…</span>` : `<span class="mute">–</span>`;
+const DLV = s => s === "delivered" ? `<span class="okk" title="נמסר">✓</span>` : s === "failed" ? `<span class="er" title="נכשל">✕</span>` : s === "bounced" ? `<span class="er" title="המייל חזר: כתובת שגויה?">↩</span>` : s ? `<span class="wn" title="נשלח, ממתין לאישור מסירה">…</span>` : `<span class="mute">–</span>`;
 const ago = d => { const n = Math.floor((Date.now() - d) / 864e5); return n <= 0 ? "היום" : n === 1 ? "אתמול" : `לפני ${n} ימים`; };
 const inD = d => { const n = Math.ceil((d - Date.now()) / 864e5); return n <= 1 ? "מחר" : `בעוד ${n} ימים`; };
 // where the customer is + what comes next and when (email/SMS flow)
@@ -1597,7 +1597,7 @@ function tracking(){
   const act = T.filter(x => !x.t.closed && !x.t.waiting), due = act.filter(x => x.t.manualDue), autoQ = act.filter(x => x.t.auto);
   const today = jday(Date.now()), sentToday = MSGS.filter(m => jday(m.at) === today);
   const newToday = act.filter(x => x.t.stage === 0 && x.c.latest && jday(x.c.latest) === today).length;
-  const failed = MSGS.filter(m => m.status === "failed"), dlv = MSGS.filter(m => m.status === "delivered").length;
+  const failed = MSGS.filter(m => m.status === "failed" || m.status === "bounced"), dlv = MSGS.filter(m => m.status === "delivered").length;
   // pipeline: one column per stage, due-now first
   const cols = [0, 1, 2, 3, 4].map(s => act.filter(x => x.t.stage === s)
     .sort((a, b) => (b.t.manualDue - a.t.manualDue) || ((a.t.sendAt || a.t.due || 0) - (b.t.sendAt || b.t.due || 0))));
@@ -1618,7 +1618,7 @@ function tracking(){
   const name = p => (ALLCASES.find(c => c.phone === p) || {}).name || local(p);
   let rows = Object.values(groups).filter(g => new Date(g.at) >= from)
     .filter(g => !TF.ch || g.ch[TF.ch])
-    .filter(g => !TF.st || Object.values(g.ch).some(m => TF.st === "sent" ? m.status === "sent" || m.status === "queued" : m.status === TF.st))
+    .filter(g => !TF.st || Object.values(g.ch).some(m => TF.st === "sent" ? m.status === "sent" || m.status === "queued" : TF.st === "failed" ? m.status === "failed" || m.status === "bounced" : m.status === TF.st))
     .filter(g => !TF.q || hit(ALLCASES.find(c => c.phone === g.phone) || { phone: g.phone }, TF.q.toLowerCase()))
     .sort((a, b) => b.at.localeCompare(a.at));
   const sel = (id, v, opts) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${k === v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
@@ -1640,10 +1640,10 @@ function tracking(){
         <input id="tq" placeholder="🔍 שם / טלפון / 4 ספרות" value="${esc(TF.q)}">
         ${sel("tp", TF.p, [["1", "היום"], ["7", "7 ימים"], ["30", "30 יום"], ["", "הכל"]])}
         ${sel("tch", TF.ch, [["", "מייל + SMS"], ["email", "📧 מייל בלבד"], ["sms", "💬 SMS בלבד"]])}
-        ${sel("tst", TF.st, [["", "כל הסטטוסים"], ["delivered", "נמסר"], ["sent", "נשלח, ממתין"], ["failed", "נכשל"]])}
+        ${sel("tst", TF.st, [["", "כל הסטטוסים"], ["delivered", "נמסר"], ["sent", "נשלח, ממתין"], ["failed", "נכשל"], ["bounced", "מייל חזר"]])}
         <span class="mute">${rows.length} שליחות</span></div>
       <div class="tbl"><table><tr><th>מתי</th><th>לקוח</th><th>שלב</th><th>📧 מייל</th><th>💬 SMS</th><th>מועד אחרון ללקוח</th></tr>
-      ${rows.map(g => { const e = g.ch.email, s = g.ch.sms; return `<tr data-open="${g.phone}" class="${Object.values(g.ch).some(m => m.status === "failed") ? "flr" : ""}">
+      ${rows.map(g => { const e = g.ch.email, s = g.ch.sms; return `<tr data-open="${g.phone}" class="${Object.values(g.ch).some(m => m.status === "failed" || m.status === "bounced") ? "flr" : ""}">
         <td>${new Date(g.at).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
         <td><b>${esc(name(g.phone))}</b><br><span class="mute">${esc(local(g.phone))}</span></td>
         <td>${g.stage} · ${esc(CMS_T.NAMES[g.stage])}</td>
@@ -1692,7 +1692,7 @@ function stats(a, b){
   return { wa, ss, ms, pays, touched,
     collected: pays.reduce((t, p) => t + p.amount - (p.refunded || 0), 0), commission: pays.reduce((t, p) => t + Number(p.commission || 0), 0),
     incoming: ALLCASES.filter(c => c.latest && inP(c.latest, a, b)).length,
-    delivered: ms.filter(m => m.status === "delivered").length, failed: ms.filter(m => m.status === "failed").length };
+    delivered: ms.filter(m => m.status === "delivered").length, failed: ms.filter(m => m.status === "failed" || m.status === "bounced").length };
 }
 const delta = (now, before, money) => {
   if (!before && !now) return `<small class="mute">&nbsp;</small>`;
@@ -1739,7 +1739,7 @@ function summary(){
   const name = p => (ALLCASES.find(c => c.phone === p) || {}).name || local(p);
   const feed = [
     ...S.wa.map(e => ({ at: e.at, ic: "💬", who: e.phone, what: `וואטסאפ → ${e.status}${e.note ? " · " + e.note : ""}`, f: "wa" })),
-    ...S.ss.map(s => ({ at: s.at, ic: "📧", who: s.phone, what: `שלב ${s.stage} · ${CMS_T.NAMES[s.stage]} נשלח (${s.ch.map(m => m.channel === "email" ? "מייל" : "SMS").join(" + ")})${s.ch.some(m => m.status === "failed") ? " · ⚠ נכשל" : ""}`, f: "em" })),
+    ...S.ss.map(s => ({ at: s.at, ic: "📧", who: s.phone, what: `שלב ${s.stage} · ${CMS_T.NAMES[s.stage]} נשלח (${s.ch.map(m => m.channel === "email" ? "מייל" : "SMS").join(" + ")})${s.ch.some(m => m.status === "failed") ? " · ⚠ נכשל" : ""}${s.ch.some(m => m.status === "bounced") ? " · ↩ המייל חזר" : ""}`, f: "em" })),
     ...S.pays.map(p => ({ at: p.paid_at, ic: "💰", who: p.phone, what: `שולם ${ils(p.amount)} ב-Stripe`, f: "pay" })),
   ].sort((x, y) => y.at.localeCompare(x.at));
   const lbl = { "1": "היום", "7": "7 הימים האחרונים", "30": "30 הימים האחרונים" }[SP];
@@ -1809,7 +1809,7 @@ function timeline(c){
     ...WAEV.filter(e => e.phone === c.phone && !String(e.status).startsWith("שולם")).map(e => ({ at: e.at, f: "wa", tag: "💬 וואטסאפ", what: e.status, note: e.note })),
     ...Object.values(MSGS.filter(m => m.phone === c.phone).reduce((g, m) => { const k = m.stage + "|" + m.at.slice(0, 16); (g[k] = g[k] || []).push(m); return g; }, {}))
       .map(g => ({ at: g[0].at, f: "em", tag: "📧 מייל + SMS", what: `שלב ${g[0].stage} · ${CMS_T.NAMES[g[0].stage]}`,
-        note: g.map(m => `${m.channel === "email" ? "מייל" : "SMS"}: ${MST[m.status][0]}${m.error ? " (" + m.error + ")" : ""}`).join(" · "), bad: g.some(m => m.status === "failed") })),
+        note: g.map(m => `${m.channel === "email" ? "מייל" : "SMS"}: ${MST[m.status][0]}${m.error ? " (" + m.error + ")" : ""}`).join(" · "), bad: g.some(m => m.status === "failed" || m.status === "bounced") })),
     ...CEV.filter(e => e.phone === c.phone && !String(e.note || "").startsWith("📧💬")).map(e => ({ at: e.at, f: "em", tag: "📧 מייל + SMS", what: "סטטוס: " + e.status, note: e.note, bad: String(e.note || "").includes("⚠") })),
     ...PAYS.filter(p => p.phone === c.phone && p.amount > 0).map(p => ({ at: p.paid_at, f: "pay", tag: "💰 תשלום", what: `שולם ${ils(p.amount)}`, note: "אומת ב-Stripe" })),
   ].filter(x => !CF.hf || x.f === CF.hf || x.f === "pay").sort((a, b) => b.at.localeCompare(a.at));

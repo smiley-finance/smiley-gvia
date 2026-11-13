@@ -10,3 +10,6 @@ verify_jwt = false
 
 [functions.cms-health]
 verify_jwt = true
+
+[functions.cms-bounce]
+verify_jwt = false

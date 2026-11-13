@@ -14,6 +14,8 @@ Built to fit how the desk works today:
 | `migrations/..._cms_cron.sql` | pg_cron every 15 min → `cms-send` with `{"auto":true}`. Runs with nobody logged in. |
 | `functions/cms-send` | agent click (stage 1, or any stage early) + the scheduler (stages 2–4). Runs the same rules as the page (`send.js`). |
 | `functions/cms-report` | Sendy delivery reports (signed webhook: delivered / undelivered / failed). |
+| `functions/cms-bounce` | every 15 min (cron `cms-bounce`): reads the collections@ mailbox READ ONLY over IMAP (same app password), finds Gmail bounces, sets the email row to `bounced` (shown as "חזר") and adds a note to the customer's history. Sends nothing. `{"dry":true}` = report only. |
+| `migrations/..._cms_bounces.sql` | status `bounced` + the `cms-bounce` cron. |
 | `functions/cms-health` | the connection dot in the header. Sends nothing. |
 | `functions/_shared` | `templates.js` + `send.js`: the same texts and rules that are inside `index.html`. Change both together. |
 
@@ -39,5 +41,5 @@ Sending only happens Sunday–Thursday, 08:00–20:00 Israel time. Nothing goes 
 Stop the scheduler any time: `select cron.unschedule('cms-auto');`. Remove everything: `rollback.sql`.
 
 ## Not verified yet
-- **Email bounces:** Gmail accepts the mail (shown as "נמסר"). A bounce then comes back as an email to the collections@ inbox; it does not update the log yet.
+- **Email bounces:** handled by `cms-bounce` (since 13.11.2026). Matched by the `X-CMS-Id` header on every email, or the original Message-ID. A bounced email still counts as "stage sent" (the SMS usually went out); the agent fixes the address.
 - SMS: written from Sendy's public docs (sendy.co.il/docs). First real send happens in the fake-customer test.

@@ -10,7 +10,7 @@
 //
 // ctx = { log: [messages of this case], now: Date, ignoreQuiet: bool (test only) }
 // log rows look like the planned table cms_messages:
-//   { id, phone, stage, channel: "email"|"sms", to, subject, body, due, status: "queued"|"sent"|"delivered"|"failed", error, at }
+//   { id, phone, stage, channel: "email"|"sms", to, subject, body, due, status: "queued"|"sent"|"delivered"|"failed"|"bounced", error, at }
 (function (root) {
   const T = root.CMS_T;
   const DONE = "בוצע – ממתין לאימות", HOLD = "בבדיקה/המתנה";
@@ -111,7 +111,7 @@
     if (!email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
     if (!sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
     if (!email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
-    if (log.some(m => m.channel === "email" && m.status === "failed")) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
+    if (log.some(m => m.channel === "email" && (m.status === "failed" || m.status === "bounced"))) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
 
     const due = dueFor(c, stage, log, now);
     const msg = T.render(c, stage, { due, hasEmail: email, now });
@@ -153,7 +153,7 @@
       lastAt: last ? new Date(last.at) : null,
       email: (lastStage.find(m => m.channel === "email") || {}).status || null,     // delivery of the last stage, per channel
       sms: (lastStage.find(m => m.channel === "sms") || {}).status || null,
-      failed: log.some(m => m.status === "failed"),
+      failed: log.some(m => m.status === "failed" || m.status === "bounced"),
       closed, waiting, talking, status: st, count: log.length,
     };
   }
