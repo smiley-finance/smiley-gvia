@@ -1,6 +1,6 @@
 # Smiley collections desk — dashboard
 
-The page the collections agent works in: https://yairecom.github.io/smiley-gvia/
+The page the collections agent works in: https://smiley-finance.github.io/smiley-gvia/ (the old address yairecom.github.io/smiley-gvia redirects here)
 
 Everything is in one file, `index.html` (HTML + CSS + JS, Hebrew, RTL). There is no build step. GitHub Pages serves `main` as is.
 
@@ -8,7 +8,7 @@ Everything is in one file, `index.html` (HTML + CSS + JS, Hebrew, RTL). There is
 1. Make a branch, edit `index.html`, push the branch.
 2. Preview your branch, logged in with your own (agent) account:
    - locally: `python3 -m http.server 8000` in the repo folder → http://localhost:8000
-   - or online: `https://raw.githack.com/yairecom/smiley-gvia/<your-branch>/index.html`
+   - or online: `https://raw.githack.com/smiley-finance/smiley-gvia/<your-branch>/index.html`
 3. Open a Pull Request into `main`. Write in the description what changed and add a screenshot.
 4. It goes live only after Yair approves and merges it. Direct pushes to `main` are blocked.
 
