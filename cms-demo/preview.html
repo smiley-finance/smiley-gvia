@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CMS · תבניות מייל ו-SMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="mock-data.js"></script>
+<script src="../supabase/functions/_shared/templates.js"></script>
+<script src="../supabase/functions/_shared/send.js"></script>
+<style>
+:root{--bg:#f3f4fa;--card:#fff;--ink:#1b1d2a;--mute:#6b7085;--line:#e4e6f0;--acc:#4f46e5;--acc2:#7c3aed;--accbg:#eef0ff;--ok:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box}body{margin:0;font-family:Heebo,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+.mockbar{background:#fef3c7;border-bottom:1px solid #fcd34d;color:#78350f;padding:8px 16px;font-size:13px}
+header{background:linear-gradient(110deg,var(--acc),var(--acc2));color:#fff;padding:16px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:20px}header p{margin:2px 0 0;opacity:.85;font-size:13px}header .sp{flex:1}
+header a{color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:7px 12px;text-decoration:none;font-size:14px}
+.wrap{max-width:1300px;margin:0 auto;padding:16px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.seg{display:flex;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:7px 13px;border-radius:999px;cursor:pointer;font:inherit;color:var(--mute);font-weight:500}
+.seg button.on{background:var(--acc);color:#fff}
+select{font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;min-width:260px}
+.lbl{font-size:12px;color:var(--mute);font-weight:700}
+.grid{display:grid;grid-template-columns:330px 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}select{min-width:0;width:100%}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 4px 14px rgba(20,22,40,.05);overflow:hidden}
+.h{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.h small{font-weight:400;color:var(--mute)}
+.phone{margin:16px auto;width:280px;border:10px solid #1b1d2a;border-radius:36px;background:#e9ecf3;min-height:380px;padding:18px 12px}
+.phone .from{text-align:center;font-size:12px;color:var(--mute);margin-bottom:12px}
+.bub{background:#fff;border-radius:16px 16px 4px 16px;padding:10px 12px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.bub a{color:#2563eb}
+.cnt{padding:0 16px 16px;font-size:13px;color:var(--mute)}.cnt b{color:var(--ink)}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.mhead{padding:12px 16px;border-bottom:1px solid var(--line);font-size:14px;display:grid;gap:3px}
+.mhead .s{font-size:17px;font-weight:700}.mhead .pre{color:var(--mute);font-size:13px}
+.att{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:13px;background:#fafbff;width:max-content}
+iframe{width:100%;border:0;display:block;height:900px;background:#f4f5f8}
+pre.txt{margin:0;padding:18px;white-space:pre-wrap;font-family:Heebo,system-ui,sans-serif;font-size:14px;line-height:1.7;background:#fff}
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+table.t th,table.t td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right}
+table.t th{background:#f7f8fc;color:var(--mute)}
+.who{padding:10px 16px;font-size:13px;color:var(--mute);border-bottom:1px solid var(--line);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="mockbar">🧪 <b>מצב הדגמה</b> · לקוחות מדומים בלבד · לא מחובר לשום מערכת</div>
+<header>
+  <div><h1>CMS · תבניות מייל ו-SMS</h1><p>שירות הודעות גבייה · כל שלב נשלח כמייל (המקום המרכזי) + SMS (התראה קצרה) באותו רגע</p></div>
+  <span class="sp"></span><a href="dashboard.html">לדשבורד הדמו ←</a>
+</header>
+<div class="wrap">
+  <div class="bar">
+    <span class="lbl">לקוח לדוגמה:</span><select id="cust"></select>
+    <span class="lbl">שלב:</span>
+    <div class="seg" id="stage"><button data-v="1" class="on">1 · פנייה ראשונה</button><button data-v="2">2 · תזכורת</button><button data-v="3">3 · מכתב התראה</button><button data-v="4">4 · תזכורת אחרונה</button></div>
+    <span class="lbl">תצוגת מייל:</span>
+    <div class="seg" id="view"><button data-v="html" class="on">מעוצב</button><button data-v="text">טקסט בלבד</button></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="h">💬 SMS <small>התראה חד־כיוונית</small></div>
+      <div class="phone"><div class="from">Smiley</div><div class="bub" id="sms"></div></div>
+      <div class="cnt" id="smsc"></div>
+    </div>
+    <div class="card">
+      <div class="h">📧 מייל <small>כל הפרטים במקום אחד</small></div>
+      <div class="who" id="who"></div>
+      <div class="mhead"><div class="s" id="subj"></div><div class="pre" id="pre"></div><div id="att"></div></div>
+      <div id="body"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="h">בדיקת אורך SMS · כל הלקוחות × כל השלבים <small>יעד: 2 חלקים לכל היותר (עד 134 תווים בעברית)</small></div>
+    <div style="overflow:auto"><table class="t" id="lens"></table></div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = CMS_SEND.fmt, DAY = 864e5;
+const dueOf = stage => fmt(new Date(Date.now() + (stage <= 2 ? 7 : 14) * DAY));
+const S = { c: 0, stage: 1, view: "html" };
+const VAR = { sent: "נשלח", delivered: "נשלח ונמסר", fraud: "בעל כרטיס אחר" };
+MOCK.cases.forEach((c, i) => $("#cust").insertAdjacentHTML("beforeend",
+  `<option value="${i}">${esc(c.name)} · ${VAR[c.variant]}${c.kind === "sub" ? " · מנוי" : ""}${!c.email ? " · בלי מייל" : /bounce/.test(c.email) ? " · מייל שחוזר" : ""}${String(c.orders_label).includes(",") ? " · 2 הזמנות" : ""}</option>`));
+
+function draw(){
+  const c = MOCK.cases[S.c], email = CMS_SEND.validEmail(c.email);
+  const m = CMS_T.render(c, S.stage, { due: dueOf(S.stage), hasEmail: email });
+  $("#sms").innerHTML = esc(m.sms).replace(/(https?:\/\/\S+)/g, '<a href="#">$1</a>');
+  const i = m.smsInfo;
+  $("#smsc").innerHTML = `<b>${i.len}</b> תווים · ${i.enc} · <b class="${i.parts <= 2 ? "ok" : "warn"}">${i.parts} ${i.parts === 1 ? "הודעה" : "חלקים"}</b>${email ? "" : `<br><span class="warn">ללקוח הזה אין מייל: ה-SMS לא מפנה למייל</span>`}`;
+  $("#who").innerHTML = `אל: <b>${email ? esc(c.email) : "לא יישלח מייל (אין כתובת)"}</b> · ${esc(CMS_T.local(c.phone))} · סטטוס אחרי השליחה: <b>${esc(m.statusAfter)}</b>`;
+  $("#subj").textContent = m.subject; $("#pre").textContent = m.pre;
+  $("#att").innerHTML = m.attach ? `<span class="att">📎 ${esc(m.attach)}</span>` : "";
+  if (S.view === "text") $("#body").innerHTML = `<pre class="txt">${esc(m.text)}</pre>`;
+  else {
+    $("#body").innerHTML = `<iframe id="f" title="תצוגת המייל"></iframe>`;
+    const f = $("#f"); f.srcdoc = m.html;
+    f.onload = () => { try { f.style.height = f.contentDocument.body.scrollHeight + 40 + "px"; } catch (e) {} };
+  }
+}
+function lens(){
+  let h = `<tr><th>לקוח</th>${[1,2,3,4].map(s => `<th>שלב ${s}</th>`).join("")}</tr>`;
+  MOCK.cases.forEach(c => {
+    const email = CMS_SEND.validEmail(c.email);
+    h += `<tr><td>${esc(c.name)}${email ? "" : ` <span class="mute">(בלי מייל)</span>`}</td>` + [1,2,3,4].map(s => {
+      const i = CMS_T.render(c, s, { due: dueOf(s), hasEmail: email }).smsInfo;
+      return `<td class="${i.parts <= 2 ? "ok" : "bad"}">${i.len} · ${i.parts} ${i.parts === 1 ? "הודעה" : "חלקים"}</td>`;
+    }).join("") + `</tr>`;
+  });
+  $("#lens").innerHTML = h;
+}
+function seg(id, key, conv = v => v){
+  document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => {
+    document.querySelectorAll(`#${id} button`).forEach(x => x.classList.remove("on")); b.classList.add("on");
+    S[key] = conv(b.dataset.v); draw();
+  });
+}
+seg("stage", "stage", Number); seg("view", "view");
+$("#cust").onchange = () => { S.c = Number($("#cust").value); draw(); };
+draw(); lens();
+</script>
+</body>
+</html>

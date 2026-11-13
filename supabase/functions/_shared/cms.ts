@@ -1,5 +1,5 @@
 // CMS · shared server code for the Edge Functions.
-// The rules and the texts are the SAME files the dashboard uses (send.js, templates.js), copied here by build_real.py.
+// The rules and the texts are send.js + templates.js next to this file (the same code is copied into index.html by supabase/sync_index.py).
 import "./templates.js";
 import "./send.js";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -35,6 +35,7 @@ export const testMode = TEST_TO.length > 0;
 // MAIN SWITCH: nothing is ever sent unless the secret CMS_SENDING is exactly "on". Not set = connected, but silent.
 export const sendingOn = env("CMS_SENDING") === "on";
 const allowed = (to: string) => !testMode || TEST_TO.includes(String(to).toLowerCase());
+export const isTestRecipient = (to: string) => testMode && TEST_TO.includes(String(to || "").toLowerCase());
 
 // the logged-in agent behind a request (null = not logged in)
 export async function agent(sb: SupabaseClient, req: Request): Promise<string | null> {
@@ -109,8 +110,8 @@ export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
         // email: "delivered" = accepted by Gmail. A bounce comes back to the collections@ inbox later.
         await sb.from("cms_messages").update({ status: "delivered", provider_id: id, updated_at: new Date().toISOString() }).eq("id", r.id);
       } else {
-        await sendSms(c.phone, m.sms, r.id);                   // SMS: "sent" until the provider's delivery report (cms-report)
-        await sb.from("cms_messages").update({ status: "sent", provider_id: String(r.id), updated_at: new Date().toISOString() }).eq("id", r.id);
+        const pid = await sendSms(c.phone, m.sms, r.id);       // SMS: "sent" until Sendy's delivery report (cms-report)
+        await sb.from("cms_messages").update({ status: "sent", provider_id: pid, updated_at: new Date().toISOString() }).eq("id", r.id);
       }
       sent.push(r.channel);
     } catch (e) {

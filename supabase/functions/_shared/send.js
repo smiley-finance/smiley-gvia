@@ -1,4 +1,5 @@
-// COPY of cms/send.js, written by build_real.py. Do not edit here: edit the CMS project's send.js and run build_real.py.
+// Smiley CMS · send.js: THE source of the email/SMS send rules. Used by the Edge Functions and the demo (cms-demo/).
+// After editing, run:  python supabase/sync_index.py   (copies it into index.html, which must stay one file).
 // CMS · the send rules. This is the logic the Supabase Edge Function will run (here it runs in the mock).
 // plan(c, stage, ctx) decides IF a stage may go out, to which channels, with which deadline and texts.
 // Nothing is sent from here: the caller (fake server now, Edge Function later) does the sending.
@@ -120,8 +121,8 @@
   }
 
   // where a customer stands in the 4 stages, and when the next one is due (same days as the WhatsApp flow):
-  // Yair's letter rules (same as his WhatsApp templates): stage 1 (agent) day 0 -> stage 2 day 3 -> stage 3 letter day 8
-  // (14 days to pay) -> stage 4 "11 ימים אחרי המכתב" = 3 days before the letter's deadline
+  // Email/SMS timer (the user's decision 12.11.2026): stage 1 (agent) day 0 -> stage 2 day 3 -> stage 3 letter day 8 -> stage 4 day 11.
+  // All counted from the day stage 1 was sent. (The WhatsApp flow keeps its own timing.)
   // Uses ONLY the email/SMS flow: its log and its own status (email_status). The WhatsApp status is not used here.
   function track(c, allLog, now) {
     now = now || new Date();
@@ -140,7 +141,7 @@
     let next = null, due = null;
     if (!closed && !waiting && !talking && stage < 4) {
       next = stage + 1;
-      due = next === 1 ? now : next === 2 ? plus(s1, 3) : next === 3 ? plus(s1, 8) : plus(s3, 11);
+      due = next === 1 ? now : next === 2 ? plus(s1, 3) : next === 3 ? plus(s1, 8) : plus(s1, 11);
     }
     const last = log[log.length - 1] || null, lastStage = last ? log.filter(m => m.stage === last.stage) : [];
     const auto = !!next && next >= 2;                               // stages 2-4 go out by themselves
