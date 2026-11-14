@@ -19,9 +19,10 @@ function parse(src: string) {
   const ids = [...src.matchAll(/^X-CMS-Id:\s*(\d+)/gim)].map(m => Number(m[1]));
   const mids = [...src.matchAll(/^Message-ID:\s*(<[^>\s]+>)/gim)].map(m => m[1]);
   const to = failed ? failed[1].trim() : (/^Final-Recipient:\s*rfc822;\s*(\S+)/im.exec(src) || [])[1] || "";
-  const diag = /^Diagnostic-Code:\s*(?:smtp;\s*)?([\s\S]+?)(?:\r?\n(?!\s)|$)/im.exec(src);
+  const diag = /^Diagnostic-Code:\s*(?:smtp;\s*)?([\s\S]+?)(?:\r?\n(?!\s)|(?![\s\S])))/im.exec(src);
   const code = (/^Status:\s*([45]\.\d+\.\d+)/im.exec(src) || [])[1] || "";
-  const why = (diag ? diag[1].replace(/\s+/g, " ").trim() : "") || code || "הכתובת לא קיבלה את המייל";
+  // a long reason is folded over several lines, each repeating the code ("550-5.1.1 ..."): join them, drop the repeats
+  const why = (diag ? diag[1].replace(/\s+\d{3}[- ]\d\.\d+\.\d+\s+/g, " ").replace(/\s+/g, " ").trim() : "") || code || "הכתובת לא קיבלה את המייל";
   return { to, ids, mids, why: why.slice(0, 250) };
 }
 
@@ -36,14 +37,19 @@ Deno.serve(async (req) => {
   const client = new ImapFlow({ host: "imap.gmail.com", port: 993, secure: true, auth: imapAuth(), logger: false });
   // deno-lint-ignore no-explicit-any
   const found: any[] = [];
+  let step = "connect";
   try {
     await client.connect();
+    step = "list";
     // "All Mail" catches a bounce even if someone archived it; its name depends on the mailbox language, so find it by its flag
     const boxes = await client.list();
     const all = boxes.find(b => b.specialUse === "\\All")?.path || "INBOX";
+    step = "open";
     await client.mailboxOpen(all, { readOnly: true });
+    step = "search";
     const since = new Date(Date.now() - DAYS * 864e5);
     const uids = ((await client.search({ from: "mailer-daemon", since }, { uid: true })) || []).slice(-MAX);
+    step = "fetch";
     if (uids.length) {
       for await (const m of client.fetch(uids, { source: true, envelope: true }, { uid: true })) {
         const p = parse(m.source?.toString("utf8") || "");
@@ -52,7 +58,9 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     try { await client.logout(); } catch { /* ignore */ }
-    return json(req, { ok: false, error: "IMAP: " + String((e as Error).message || e).slice(0, 200) }, 500);
+    // deno-lint-ignore no-explicit-any
+    const x = e as any;
+    return json(req, { ok: false, error: `IMAP (${step}): ` + String(x.message || e).slice(0, 200) + (x.responseText ? " · " + String(x.responseText).slice(0, 200) : "") + (x.authenticationFailed ? " · login refused" : "") }, 500);
   }
   try { await client.logout(); } catch { /* ignore */ }
 
