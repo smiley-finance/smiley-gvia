@@ -19,7 +19,7 @@ function parse(src: string) {
   const ids = [...src.matchAll(/^X-CMS-Id:\s*(\d+)/gim)].map(m => Number(m[1]));
   const mids = [...src.matchAll(/^Message-ID:\s*(<[^>\s]+>)/gim)].map(m => m[1]);
   const to = failed ? failed[1].trim() : (/^Final-Recipient:\s*rfc822;\s*(\S+)/im.exec(src) || [])[1] || "";
-  const diag = /^Diagnostic-Code:\s*(?:smtp;\s*)?([\s\S]+?)(?:\r?\n(?!\s)|(?![\s\S])))/im.exec(src);
+  const diag = /^Diagnostic-Code:\s*(?:smtp;\s*)?([\s\S]+?)(?:\r?\n(?!\s)|(?![\s\S]))/im.exec(src);
   const code = (/^Status:\s*([45]\.\d+\.\d+)/im.exec(src) || [])[1] || "";
   // a long reason is folded over several lines, each repeating the code ("550-5.1.1 ..."): join them, drop the repeats
   const why = (diag ? diag[1].replace(/\s+\d{3}[- ]\d\.\d+\.\d+\s+/g, " ").replace(/\s+/g, " ").trim() : "") || code || "הכתובת לא קיבלה את המייל";
