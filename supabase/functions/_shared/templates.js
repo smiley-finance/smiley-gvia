@@ -21,6 +21,8 @@
   const plain = s => String(s).replace(/\*\*/g, "");                                   // **bold** -> bold
   const rich = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");                     // escaped, then **bold** -> <b>
   const local = p => p && String(p).startsWith("972") ? "0" + String(p).slice(3) : String(p || "");
+  // the product(s) of the case's orders, as one short line (empty if unknown)
+  const product = c => [...new Set((c.orders || []).map(o => String(o.products || "").trim()).filter(Boolean))].join(", ");
   const ordWord = c => (String(c.orders_label || "").includes(",") ? "הזמנות " : "הזמנה ") + c.orders_label;
 
   // "what happened" line, same wording as the WhatsApp template (msgs() in the dashboard)
@@ -164,18 +166,18 @@
 
   // ---------- SMS: a short one-way notification; the email has the details ----------
   // Hebrew SMS = UCS-2: 70 characters for one message, 67 per part when longer. Aim: 2 parts at most.
+  // New wording (15.11.2026, after Sendy / the carriers flagged the old one as phishing):
+  // brand + order number + product first, "התשלום לא הושלם" / "יתרה" instead of "חוב", no threats in the SMS.
   function sms(c, stage, ctx) {
-    const n = c.first_name || "", L = c.short_link || c.payment_link, d = shortDate(ctx.due), left = daysWord(daysTo(ctx.due, ctx.now) ?? 3);
-    const mail = ctx.hasEmail !== false;
+    const n = c.first_name || "", L = c.short_link || c.payment_link, d = shortDate(ctx.due);
+    const mail = ctx.hasEmail !== false, ord = ordWord(c), pr = product(c), p = pr ? ` (${pr})` : "";
     const RLM = String.fromCharCode(0x200F);                  // invisible right-to-left mark (U+200F)
     return RLM + {
-      1: mail ? `Smiley: שלום ${n}, חוב פתוח על שמך בסך ${c.total}. כל הפרטים נשלחו אליך למייל. לתשלום עד ${d}:\n${L}`
-              : `Smiley: שלום ${n}, חוב פתוח על שמך בסך ${c.total} (הזמנה ${c.orders_label}). לתשלום מאובטח עד ${d}:\n${L}`,
-      2: mail ? `Smiley: תזכורת, החוב בסך ${c.total} לא הוסדר. הפרטים במייל. לתשלום עד ${d}:\n${L}`
-              : `Smiley: תזכורת, החוב בסך ${c.total} לא הוסדר. לתשלום עד ${d}:\n${L}`,
-      3: mail ? `Smiley: נשלח אליך למייל מכתב התראה רשמי, חוב ${c.total}. להסדרה עד ${d}:\n${L}`
-              : `Smiley: נשלח אליך מכתב התראה רשמי בנוגע לחוב בסך ${c.total}. להסדרה עד ${d}:\n${L}`,
-      4: `Smiley: נותרו ${left} להסדרת החוב בסך ${c.total}. אחרי ${d} לא תישלח פנייה נוספת:\n${L}`,
+      1: `Smiley: שלום ${n}, התשלום על ${ord}${p} בסך ${c.total} לא הושלם. ${mail ? "הפרטים נשלחו למייל." : "לשאלות: collections@try-smiley.com"} להשלמת התשלום עד ${d}: ${L}`,
+      2: `Smiley: תזכורת לגבי ${ord}${p}: יתרה של ${c.total} טרם שולמה. להשלמה עד ${d}: ${L}`,
+      3: mail ? `Smiley: בנוגע ל${ord}, שלחנו אליך למייל מכתב רשמי לגבי היתרה בסך ${c.total}. להסדרה עד ${d}: ${L}`
+              : `Smiley: בנוגע ל${ord}${p}, היתרה בסך ${c.total} טרם הוסדרה. להסדרה עד ${d}: ${L}`,
+      4: `Smiley: ${ord}${p}: היתרה בסך ${c.total} עדיין פתוחה, וזו ההודעה האחרונה בנושא. להסדרה עד ${d}: ${L}`,
     }[stage];
   }
   const shortDate = due => String(due || "").replace(/^(\d\d)[./](\d\d)[./]\d{4}$/, "$1.$2");
