@@ -980,7 +980,29 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
   .nav .tab.on{background:var(--accbg);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 35%,transparent)}
   header .btn{min-height:32px}
 }
-</style>
+/* ===== GUI pass 15.11.2026: layout fixes only (no data, no texts) ===== */
+/* tabs: icon + label */
+.nav .tab{display:inline-flex;align-items:center;gap:6px}
+.nav .tab i{font-style:normal;line-height:1}
+.nav .tab span{white-space:nowrap}
+/* side panels: above the sticky tab bar (it used to cover the top of the WhatsApp case panel), both open from the same side */
+.shade{z-index:35}
+#vCases.board #det{z-index:36}
+.ep .epp{right:auto;left:0;box-shadow:8px 0 40px rgba(20,22,40,.25)}
+/* email/SMS board: all 5 stages fit on a laptop screen without sideways scrolling */
+@media (min-width:861px){.tp{grid-template-columns:repeat(5,minmax(178px,1fr))}}
+/* channel marks never split from their icon */
+.tl .chn,.sr .chn{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+/* KPI rows: 5 cards stay in one row on laptops; on narrow screens an odd last card fills the row instead of leaving a hole */
+@media (max-width:1100px) and (min-width:861px){.kpis.tk{grid-template-columns:repeat(5,1fr)}}
+@media (max-width:860px){.kpis>.kpi:last-child:nth-child(odd){grid-column:1/-1}}
+/* tables: dates, months, amounts and status pills stay on one line */
+#vPay td,#vPay th{white-space:nowrap}
+#vPay .tbl{overflow-x:auto}
+@media (max-width:860px){
+  .nav .tab{flex-direction:column;gap:3px;font-size:11px;line-height:1.15;padding:6px 2px}
+  .nav .tab i{font-size:17px}
+}</style>
 </head>
 <body>
 <div class="wrap">
@@ -1005,13 +1027,13 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
     </header>
     <nav class="nav" id="nav">
       <div class="ng"><div class="nb">
-        <button class="tab on" data-v="sum">📊 סיכום</button><button class="tab" data-v="cust">👥 לקוחות</button></div></div>
+        <button class="tab on" data-v="sum"><i>📊</i><span>סיכום</span></button><button class="tab" data-v="cust"><i>👥</i><span>לקוחות</span></button></div></div>
       <div class="ng wa"><div class="nb">
-        <button class="tab" data-v="all">💬 וואטסאפ</button></div></div>
+        <button class="tab" data-v="all"><i>💬</i><span>וואטסאפ</span></button></div></div>
       <div class="ng em"><div class="nb">
-        <button class="tab" data-v="track">📧 מייל / SMS</button></div></div>
+        <button class="tab" data-v="track"><i>📧</i><span>מייל / SMS</span></button></div></div>
       <div class="ng"><div class="nb">
-        <button class="tab" data-v="pay">עמלות ושכר</button></div></div>
+        <button class="tab" data-v="pay"><i>💰</i><span>עמלות ושכר</span></button></div></div>
     </nav>
     <div id="banner" class="card banner hide">מצב עובד: זה מה שהעובד רואה. שינויים שתעשה כאן נשמרים בתיקים, אבל לא נספרים לו לעמלה.</div>
     <div class="kpis" id="kpis"><div class="kpi"><b class="mute">…</b><span>טוען…</span></div></div>
@@ -1054,7 +1076,7 @@ let MSGS = [], ALLCASES = [], TF = { p: "7", ch: "", st: "", q: "", col: "" };  
 let PTAB = "msgs", LIST = [];                                   // design only: open tab inside the case panel, order of the list on screen
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const ils = n => "₪" + Number(n || 0).toLocaleString("he-IL", {minimumFractionDigits: 0, maximumFractionDigits: 2});
+const ils = n => { const v = Number(n || 0); return "₪" + v.toLocaleString("he-IL", {minimumFractionDigits: Math.round(v * 100) % 100 ? 2 : 0, maximumFractionDigits: 2}); };
 const today = () => new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
 const dmy = d => d.toLocaleDateString("he-IL", {day: "2-digit", month: "2-digit", year: "numeric"});
 const ym = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
@@ -1493,7 +1515,7 @@ function openEmail(phone){
       <h3>4 השלבים</h3>
       <div class="stg">${[1, 2, 3, 4].map(s => { const g = sentStage(s), e = g && g.find(m => m.channel === "email"), m = g && g.find(m => m.channel === "sms");
         return `<div class="sr ${g ? "done" : t.next === s && !t.closed && !t.waiting ? "nx" : ""}"><b>${g ? "✓" : s}</b><div class="sx"><div>שלב ${s} · ${CMS_T.NAMES[s]}</div>
-          <div class="mute">${g ? `נשלח ${hm(g[g.length - 1].at)} · 📧 ${DLV(e && e.status, e)} · 💬 ${DLV(m && m.status, m)} · מועד ללקוח ${esc(g[0].due || "")}`
+          <div class="mute">${g ? `נשלח ${hm(g[g.length - 1].at)} · <span class="chn">📧 ${DLV(e && e.status, e)}</span> · <span class="chn">💬 ${DLV(m && m.status, m)}</span> · מועד ללקוח ${esc(g[0].due || "")}`
             : t.next === s ? (s === 1 ? "ממתין לשליחה ידנית" : t.blocked ? "⏱ " + t.blocked : "⏱ אוטומטי · " + t.sendAtText) : s > 1 ? "⏱ אוטומטי" : "עוד לא"}</div></div>
           ${g ? RSB(phone, s, "email") + RSB(phone, s, "sms") : ""}<button class="btn sm" data-es="${s}">${g ? "תצוגה" : "תצוגה ושליחה"}</button></div>`; }).join("")}</div>
       <h3>מיילים ו-SMS שנשלחו</h3>
@@ -1661,7 +1683,7 @@ function tracking(){
       <div class="tt"><b>${esc(c.name)}</b><b>${esc(c.total)}</b></div>
       <div class="mute ph">${esc(local(c.phone))}${c.email ? "" : " · אין מייל"}</div>
       ${phaseLine(t)}
-      ${t.lastAt ? `<div class="tl">נשלח ${ago(t.lastAt)} · 📧 ${DLV(t.email, lastMsg(c.phone, "email"))} · 💬 ${t.sms === "failed" && !BADST(t.email) && t.email ? SMSSOFT(lastMsg(c.phone, "sms")) : DLV(t.sms, lastMsg(c.phone, "sms"))}</div>` : t.stage ? `<div class="tl mute">סומן ידנית בסטטוס המייל</div>` : `<div class="tl mute">${c.latest && jday(c.latest) === today ? "🆕 נכנס היום" : "עוד לא נשלח דבר"}</div>`}
+      ${t.lastAt ? `<div class="tl">נשלח ${ago(t.lastAt)} · <span class="chn">📧 ${DLV(t.email, lastMsg(c.phone, "email"))}</span> · <span class="chn">💬 ${t.sms === "failed" && !BADST(t.email) && t.email ? SMSSOFT(lastMsg(c.phone, "sms")) : DLV(t.sms, lastMsg(c.phone, "sms"))}</span></div>` : t.stage ? `<div class="tl mute">סומן ידנית בסטטוס המייל</div>` : `<div class="tl mute">${c.latest && jday(c.latest) === today ? "🆕 נכנס היום" : "עוד לא נשלח דבר"}</div>`}
       ${custBad(c.phone) ? `<div class="tl er">⚠ מייל חזר: לבדוק כתובת</div>` : ""}
       ${t.next ? t.manualDue ? `<div class="tn"><span class="er">לשלוח שלב 1 עכשיו</span><button class="btn send sm" data-tsend="${c.phone}|1">📧💬 שלח</button></div>`
         : ""
@@ -1947,7 +1969,7 @@ function payroll(){
     </table></div>
     <h3>תשלומים אחרונים</h3>
     <div class="tbl"><table><tr><th>תאריך</th><th>לקוח</th><th>סכום</th><th>הוחזר</th><th>עמלה</th><th>חודש</th></tr>
-    ${PAYS.filter(p => p.commissionable).slice(0, 50).map(p => { const c = CASES.find(x => x.phone === p.phone) || {}; return `<tr><td>${dmy(new Date(p.paid_at))}</td><td>${esc(c.name || p.phone)}</td>
+    ${PAYS.filter(p => p.commissionable).slice(0, 50).map(p => { const c = CASES.find(x => x.phone === p.phone) || {}; return `<tr><td>${dmy(new Date(p.paid_at))}</td><td>${esc(c.name || local(p.phone))}</td>
       <td>${ils(p.amount)}</td><td>${p.refunded ? ils(p.refunded) : ""}</td><td>${p.commissionable ? ils(p.commission) : "ללא"}</td><td>${p.month}</td></tr>`; }).join("")}</table></div>`;
   document.querySelectorAll("[data-csv]").forEach(b => b.onclick = () => csv(b.dataset.csv));
   document.querySelectorAll("[data-pay]").forEach(b => b.onclick = async () => {
