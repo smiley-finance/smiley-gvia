@@ -12,6 +12,16 @@ import { emailReady, imapAuth } from "../_shared/email.ts";
 
 const DAYS = 7, MAX = 200;
 
+// Gmail sometimes closes the IMAP connection without a clean TLS goodbye ("peer closed connection").
+// That error arrives outside our try/catch and used to kill the whole worker (503). Keep the worker alive;
+// the run itself still reports its own result, and the next run (15 min) checks the last 7 days again.
+globalThis.addEventListener("unhandledrejection", (e) => { e.preventDefault(); console.warn("cms-bounce: ignored", String(e.reason).slice(0, 160)); });
+globalThis.addEventListener("error", (e) => { e.preventDefault(); console.warn("cms-bounce: ignored", String(e.message || e.error).slice(0, 160)); });
+
+// log out in the background: never wait on (or crash from) a connection Gmail may already have dropped
+// deno-lint-ignore no-explicit-any
+const bye = (c: any) => { try { c.logout().catch(() => { try { c.close(); } catch { /* gone */ } }); } catch { /* gone */ } };
+
 // one bounce email -> what failed and why (null = not a hard failure, e.g. a "delay" notice)
 function parse(src: string) {
   const failed = /^X-Failed-Recipients:\s*(.+)$/im.exec(src);
@@ -34,12 +44,23 @@ Deno.serve(async (req) => {
   const body: any = await req.json().catch(() => ({}));
   const dry = !!body.dry, sb = admin();
 
-  const client = new ImapFlow({ host: "imap.gmail.com", port: 993, secure: true, auth: imapAuth(), logger: false });
+  const make = () => {
+    const c = new ImapFlow({ host: "imap.gmail.com", port: 993, secure: true, auth: imapAuth(), logger: false });
+    c.on("error", (e: Error) => console.warn("cms-bounce: imap", String(e?.message || e).slice(0, 160)));   // socket errors: handled, not fatal
+    return c;
+  };
+  let client = make();
   // deno-lint-ignore no-explicit-any
   const found: any[] = [];
   let step = "connect";
   try {
-    await client.connect();
+    try { await client.connect(); }
+    catch (e) {
+      // deno-lint-ignore no-explicit-any
+      if ((e as any).authenticationFailed) throw e;            // wrong app password: retrying will not help
+      bye(client); await new Promise(r => setTimeout(r, 2000));
+      client = make(); await client.connect();
+    }
     step = "list";
     // "All Mail" catches a bounce even if someone archived it; its name depends on the mailbox language, so find it by its flag
     const boxes = await client.list();
@@ -57,12 +78,12 @@ Deno.serve(async (req) => {
       }
     }
   } catch (e) {
-    try { await client.logout(); } catch { /* ignore */ }
+    bye(client);
     // deno-lint-ignore no-explicit-any
     const x = e as any;
     return json(req, { ok: false, error: `IMAP (${step}): ` + String(x.message || e).slice(0, 200) + (x.responseText ? " · " + String(x.responseText).slice(0, 200) : "") + (x.authenticationFailed ? " · login refused" : "") }, 500);
   }
-  try { await client.logout(); } catch { /* ignore */ }
+  bye(client);
 
   // match each bounce to our email rows (only rows that still look delivered)
   const marked = [], unmatched = [];
