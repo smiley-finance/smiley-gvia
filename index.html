@@ -32,6 +32,8 @@
   const plain = s => String(s).replace(/\*\*/g, "");                                   // **bold** -> bold
   const rich = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");                     // escaped, then **bold** -> <b>
   const local = p => p && String(p).startsWith("972") ? "0" + String(p).slice(3) : String(p || "");
+  // the product(s) of the case's orders, as one short line (empty if unknown)
+  const product = c => [...new Set((c.orders || []).map(o => String(o.products || "").trim()).filter(Boolean))].join(", ");
   const ordWord = c => (String(c.orders_label || "").includes(",") ? "הזמנות " : "הזמנה ") + c.orders_label;
 
   // "what happened" line, same wording as the WhatsApp template (msgs() in the dashboard)
@@ -175,18 +177,18 @@
 
   // ---------- SMS: a short one-way notification; the email has the details ----------
   // Hebrew SMS = UCS-2: 70 characters for one message, 67 per part when longer. Aim: 2 parts at most.
+  // New wording (15.11.2026, after Sendy / the carriers flagged the old one as phishing):
+  // brand + order number + product first, "התשלום לא הושלם" / "יתרה" instead of "חוב", no threats in the SMS.
   function sms(c, stage, ctx) {
-    const n = c.first_name || "", L = c.short_link || c.payment_link, d = shortDate(ctx.due), left = daysWord(daysTo(ctx.due, ctx.now) ?? 3);
-    const mail = ctx.hasEmail !== false;
+    const n = c.first_name || "", L = c.short_link || c.payment_link, d = shortDate(ctx.due);
+    const mail = ctx.hasEmail !== false, ord = ordWord(c), pr = product(c), p = pr ? ` (${pr})` : "";
     const RLM = String.fromCharCode(0x200F);                  // invisible right-to-left mark (U+200F)
     return RLM + {
-      1: mail ? `Smiley: שלום ${n}, חוב פתוח על שמך בסך ${c.total}. כל הפרטים נשלחו אליך למייל. לתשלום עד ${d}:\n${L}`
-              : `Smiley: שלום ${n}, חוב פתוח על שמך בסך ${c.total} (הזמנה ${c.orders_label}). לתשלום מאובטח עד ${d}:\n${L}`,
-      2: mail ? `Smiley: תזכורת, החוב בסך ${c.total} לא הוסדר. הפרטים במייל. לתשלום עד ${d}:\n${L}`
-              : `Smiley: תזכורת, החוב בסך ${c.total} לא הוסדר. לתשלום עד ${d}:\n${L}`,
-      3: mail ? `Smiley: נשלח אליך למייל מכתב התראה רשמי, חוב ${c.total}. להסדרה עד ${d}:\n${L}`
-              : `Smiley: נשלח אליך מכתב התראה רשמי בנוגע לחוב בסך ${c.total}. להסדרה עד ${d}:\n${L}`,
-      4: `Smiley: נותרו ${left} להסדרת החוב בסך ${c.total}. אחרי ${d} לא תישלח פנייה נוספת:\n${L}`,
+      1: `Smiley: שלום ${n}, התשלום על ${ord}${p} בסך ${c.total} לא הושלם. ${mail ? "הפרטים נשלחו למייל." : "לשאלות: collections@try-smiley.com"} להשלמת התשלום עד ${d}: ${L}`,
+      2: `Smiley: תזכורת לגבי ${ord}${p}: יתרה של ${c.total} טרם שולמה. להשלמה עד ${d}: ${L}`,
+      3: mail ? `Smiley: בנוגע ל${ord}, שלחנו אליך למייל מכתב רשמי לגבי היתרה בסך ${c.total}. להסדרה עד ${d}: ${L}`
+              : `Smiley: בנוגע ל${ord}${p}, היתרה בסך ${c.total} טרם הוסדרה. להסדרה עד ${d}: ${L}`,
+      4: `Smiley: ${ord}${p}: היתרה בסך ${c.total} עדיין פתוחה, וזו ההודעה האחרונה בנושא. להסדרה עד ${d}: ${L}`,
     }[stage];
   }
   const shortDate = due => String(due || "").replace(/^(\d\d)[./](\d\d)[./]\d{4}$/, "$1.$2");
@@ -1261,18 +1263,24 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
 $("#srt").onchange = () => { SORT = $("#srt").value; ls("sort", SORT); render(); };
 $("#q").oninput = render; $("#fs").onchange = render;
 
-// ---------- ready messages (same wording as the guide PDF) ----------
+// ---------- ready messages (WhatsApp). New wording 15.11.2026; the replies below are unchanged ----------
 function msgs(c){
   const n = c.first_name || "", ord = (c.orders_label.includes(",") ? "הזמנות " : "הזמנה ") + c.orders_label, link = c.payment_link, d7 = plus(7), d14 = plus(14);
   const mid = c.variant === "fraud"
     ? `המוצרים בהזמנה (${ord}) נשלחו לכתובת שנמסרה בהזמנה. התשלום עליהם, בסך ${c.total}, בוטל דרך חברת האשראי של בעל הכרטיס, והסכום עדיין לא שולם.`
     : `המוצרים שהזמנת (${ord}) נשלחו${c.variant === "delivered" ? " ונמסרו" : ""} לכתובתך. התשלום עליהם, בסך ${c.total}, בוטל דרך חברת האשראי, והסכום עדיין לא שולם.`;
   const ship = (c.orders || []).flatMap(o => o.shipments.map(s => `הזמנה ${o.order}: ${s.carrier} ${s.tracking} · ${s.status}${s.date ? " · " + s.date : ""}\n${s.tracking_url}`)).join("\n");
+  // New wording (15.11.2026): brand + order + product, what the charge is, an invitation to reply. No "חוב פתוח על שמך".
+  const prod = [...new Set((c.orders || []).map(o => String(o.products || "").trim()).filter(Boolean))].join(", ");
+  const op = prod ? `${ord} (${prod})` : ord;
+  const why = c.variant === "fraud"
+    ? `ההזמנה נשלחה לכתובת שנמסרה בה, אבל התשלום עליה בסך ${c.total} בוטל על ידי בעל הכרטיס, ולכן לא הושלם.`
+    : `ההזמנה נשלחה${c.variant === "delivered" ? " ונמסרה" : ""} לכתובתך, אבל התשלום עליה בסך ${c.total} בוטל דרך חברת האשראי, ולכן לא הושלם.`;
   const steps = [
-    ["1. פנייה ראשונה", "נשלחה הודעה", `שלום ${n},\nזו פנייה רשמית של מחלקת הכספים של Smiley בנוגע לחוב פתוח על שמך.\n${mid}\nיש להסדיר את מלוא הסכום עד ${d7} בקישור האישי שלמטה.\nאם החוב לא יוסדר עד המועד הזה, הטיפול בו יעבור לשלב הבא.\nאם יש לך טענה לגבי החיוב, אפשר להשיב להודעה הזו.\n${link}`],
-    ["2. תזכורת (יום 3)", "נשלחה הודעה", `שלום ${n},\nתזכורת: החוב בסך ${c.total} בגין ${ord} עדיין לא הוסדר.\nלאחר המועד שנקבע יישלח אליך מכתב התראה רשמי.\nניתן להסדיר את החוב בקישור האישי:\n${link}`],
-    ["3. מכתב התראה (יום 8, או מיד אחרי סירוב) · לצרף את ה-PDF", "נשלח מכתב התראה", `שלום ${n},\nהחוב בסך ${c.total} טרם הוסדר.\nמצורף מכתב התראה רשמי בנוגע לחוב. יש לעיין בו.\nניתן להסדיר את מלוא החוב עד ${d14} בקישור האישי שלמטה. לאחר מועד זה נפעל כמפורט במכתב.\n${link}`],
-    ["4. תזכורת אחרונה (11 ימים אחרי המכתב)", "סגור", `שלום ${n},\nנותרו 3 ימים למועד האחרון שנקבע במכתב ההתראה.\nהחוב בסך ${c.total} עדיין פתוח. לאחר מועד זה לא תישלח פנייה נוספת.\nניתן להסדיר את החוב בקישור האישי:\n${link}`],
+    ["1. פנייה ראשונה", "נשלחה הודעה", `שלום ${n}, כאן מחלקת הכספים של Smiley (try-smiley.com).\nאנחנו פונים בנוגע ל${ord}${prod ? ": " + prod : ""}.\n${why}\nאפשר להשלים את התשלום עד ${d7} בדף התשלום המאובטח שלנו (Stripe):\n${link}\nאם יש שאלה, או שמשהו בהזמנה לא תקין, אפשר להשיב כאן ונבדוק.`],
+    ["2. תזכורת (יום 3)", "נשלחה הודעה", `שלום ${n}, תזכורת קצרה מ-Smiley לגבי ${op}.\nהתשלום בסך ${c.total} עדיין לא הושלם. המועד להשלמה: ${plus(4)}.\n${link}\nאם כבר שילמת, אפשר לשלוח כאן את האישור ונעדכן.`],
+    ["3. מכתב התראה (יום 8, או מיד אחרי סירוב) · לצרף את ה-PDF", "נשלח מכתב התראה", `שלום ${n}, מאחר שהתשלום על ${op} בסך ${c.total} לא הושלם, מצורף מכתב התראה רשמי.\nעדיין אפשר להסדיר את התשלום עד ${d14}:\n${link}\nלכל שאלה, אפשר להשיב כאן.`],
+    ["4. תזכורת אחרונה (11 ימים אחרי המכתב)", "סגור", `שלום ${n}, זו הפנייה האחרונה מ-Smiley לגבי ${op}.\nהיתרה בסך ${c.total} עדיין פתוחה. אפשר להסדיר אותה עד ${plus(3)}:\n${link}\nלאחר מועד זה נפעל כפי שפורט במכתב ההתראה.`],
   ];
   const replies = [
     ["הסכים לשלם / שאל איך", `מלוא החוב (${c.total}) ניתן לתשלום בקישור האישי שלהלן, דף תשלום מאובטח של Stripe (כרטיס אשראי, ולרוב גם Apple Pay ו-Google Pay). עם התשלום יישלח אישור למייל, והתיק ייסגר.\n${link}`],
