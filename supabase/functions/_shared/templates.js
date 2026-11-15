@@ -22,6 +22,10 @@
   const rich = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");                     // escaped, then **bold** -> <b>
   const local = p => p && String(p).startsWith("972") ? "0" + String(p).slice(3) : String(p || "");
   // the product(s) of the case's orders, as one short line (empty if unknown)
+  // Readable in a phone (RTL): order numbers without "#", joined with "ו-"; amount as "289.90 ש״ח" (not "₪289.90").
+  const ordNos = c => String(c.orders_label || "").split(",").map(x => x.replace(/[^0-9A-Za-z-]/g, "")).filter(Boolean);
+  const ordTxt = c => { const n = ordNos(c); return (n.length > 1 ? "הזמנות מס׳ " : "הזמנה מס׳ ") + n.join(" ו-"); };
+  const amt = c => { const v = String(c.total || "").replace(/[₪\s]/g, ""); return v ? v + " ש״ח" : String(c.total || ""); };
   const product = c => [...new Set((c.orders || []).map(o => String(o.products || "").trim()).filter(Boolean))].join(", ");
   const ordWord = c => (String(c.orders_label || "").includes(",") ? "הזמנות " : "הזמנה ") + c.orders_label;
 
@@ -166,18 +170,19 @@
 
   // ---------- SMS: a short one-way notification; the email has the details ----------
   // Hebrew SMS = UCS-2: 70 characters for one message, 67 per part when longer. Aim: 2 parts at most.
-  // New wording (15.11.2026, after Sendy / the carriers flagged the old one as phishing):
-  // brand + order number + product first, "התשלום לא הושלם" / "יתרה" instead of "חוב", no threats in the SMS.
+  // Wording v2 (15.11.2026): one detail per line, every line starts with a Hebrew word (a line starting with
+  // "Smiley" or a number flips direction on the phone), the link alone on the last line. No "חוב".
   function sms(c, stage, ctx) {
     const n = c.first_name || "", L = c.short_link || c.payment_link, d = shortDate(ctx.due);
-    const mail = ctx.hasEmail !== false, ord = ordWord(c), pr = product(c), p = pr ? ` (${pr})` : "";
+    const mail = ctx.hasEmail !== false, o = ordTxt(c), pr = product(c), a = amt(c);
+    const P = pr ? `\nמוצר: ${pr}` : "";
     const RLM = String.fromCharCode(0x200F);                  // invisible right-to-left mark (U+200F)
     return RLM + {
-      1: `Smiley: שלום ${n}, התשלום על ${ord}${p} בסך ${c.total} לא הושלם. ${mail ? "הפרטים נשלחו למייל." : "לשאלות: collections@try-smiley.com"} להשלמת התשלום עד ${d}: ${L}`,
-      2: `Smiley: תזכורת לגבי ${ord}${p}: יתרה של ${c.total} טרם שולמה. להשלמה עד ${d}: ${L}`,
-      3: mail ? `Smiley: בנוגע ל${ord}, שלחנו אליך למייל מכתב רשמי לגבי היתרה בסך ${c.total}. להסדרה עד ${d}: ${L}`
-              : `Smiley: בנוגע ל${ord}${p}, היתרה בסך ${c.total} טרם הוסדרה. להסדרה עד ${d}: ${L}`,
-      4: `Smiley: ${ord}${p}: היתרה בסך ${c.total} עדיין פתוחה, וזו ההודעה האחרונה בנושא. להסדרה עד ${d}: ${L}`,
+      1: `שלום ${n},\nכאן מחלקת הכספים של Smiley.\nהתשלום על ${o} לא הושלם.${P}\nסכום: ${a}\n${mail ? "הפרטים המלאים נשלחו אליך במייל." : "לשאלות: collections@try-smiley.com"}\nלהשלמת התשלום עד ${d}:\n${L}`,
+      2: `שלום ${n}, תזכורת מ-Smiley.\nהתשלום על ${o} עדיין לא הושלם.${P}\nסכום: ${a}\nלהשלמה עד ${d}:\n${L}`,
+      3: mail ? `שלום ${n},\nשלחנו אליך במייל מכתב רשמי בנוגע ל${o}.\nסכום לתשלום: ${a}\nלהסדרה עד ${d}:\n${L}`
+              : `שלום ${n},\nהתשלום על ${o} עדיין לא הוסדר.${P}\nסכום לתשלום: ${a}\nלהסדרה עד ${d}:\n${L}`,
+      4: `שלום ${n},\nזו ההודעה האחרונה מ-Smiley בנוגע ל${o}.${P}\nיתרה לתשלום: ${a}\nלהסדרה עד ${d}:\n${L}`,
     }[stage];
   }
   const shortDate = due => String(due || "").replace(/^(\d\d)[./](\d\d)[./]\d{4}$/, "$1.$2");
@@ -198,5 +203,5 @@
              sms: sm, smsInfo: segs(sm), statusAfter: STATUS_AFTER[stage] };
   }
 
-  root.CMS_T = { render, segs, NAMES, STATUS_AFTER, local };
+  root.CMS_T = { render, segs, NAMES, STATUS_AFTER, local, ordTxt, amt, product };
 })(typeof window !== "undefined" ? window : globalThis);
