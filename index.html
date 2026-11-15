@@ -1628,8 +1628,14 @@ const tip = (m, base) => esc(WHY(m) ? WHY(m) + (m.error ? " · " + m.error : "")
 const SMSSOFT = m => `<span class="mute" title="${tip(m, "ה-SMS לא נמסר, המייל נמסר (תזכורת בלבד)")}">✕</span>`;
 const lastMsg = (phone, ch) => MSGS.filter(m => m.phone === phone && m.channel === ch).sort((a, b) => b.at.localeCompare(a.at))[0];
 // backup send: the channel of a stage that failed and was not sent again yet (empty = nothing to resend)
+// No button when resending can't help: an SMS that failed with 205 (the number itself, confirmed by Sendy),
+// or an email that bounced from the address the customer still has (fix the address first, then the button comes back).
 const canResend = (phone, stage, ch) => { const g = MSGS.filter(m => m.phone === phone && m.stage === stage && m.channel === ch);
-  return g.length > 0 && g.every(m => BADST(m.status)); };
+  if (!g.length || !g.every(m => BADST(m.status))) return false;
+  if (ch === "sms" && g.every(m => /205|undelivered/i.test(String(m.error || "")))) return false;
+  const now = String((ALLCASES.find(c => c.phone === phone) || {}).email || "").toLowerCase();
+  if (ch === "email" && g.some(m => m.status === "bounced" && String(m.to || "").toLowerCase() === now)) return false;
+  return true; };
 const RSB = (phone, stage, ch) => canResend(phone, stage, ch)
   ? `<button class="btn sm rs" data-resend="${phone}|${stage}|${ch}" title="שליחה חוזרת של ה${ch === "email" ? "מייל" : "-SMS"} בלבד">🔁 ${ch === "email" ? "מייל" : "SMS"} שוב</button>` : "";
 const DLV = (s, m) => s === "delivered" ? `<span class="okk" title="נמסר">✓</span>` : s === "failed" ? `<span class="er" title="${tip(m, "נכשל")}">✕</span>` : s === "bounced" ? `<span class="er" title="${tip(m, "המייל חזר: כתובת שגויה?")}">↩</span>` : s ? `<span class="wn" title="נשלח, ממתין לאישור מסירה">…</span>` : `<span class="mute">–</span>`;
