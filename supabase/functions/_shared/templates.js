@@ -21,12 +21,6 @@
   const plain = s => String(s).replace(/\*\*/g, "");                                   // **bold** -> bold
   const rich = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");                     // escaped, then **bold** -> <b>
   const local = p => p && String(p).startsWith("972") ? "0" + String(p).slice(3) : String(p || "");
-  // the product(s) of the case's orders, as one short line (empty if unknown)
-  // Readable in a phone (RTL): order numbers without "#", joined with "ו-"; amount as "289.90 ש״ח" (not "₪289.90").
-  const ordNos = c => String(c.orders_label || "").split(",").map(x => x.replace(/[^0-9A-Za-z-]/g, "")).filter(Boolean);
-  const ordTxt = c => { const n = ordNos(c); return (n.length > 1 ? "הזמנות מס׳ " : "הזמנה מס׳ ") + n.join(" ו-"); };
-  const amt = c => { const v = String(c.total || "").replace(/[₪\s]/g, ""); return v ? v + " ש״ח" : String(c.total || ""); };
-  const product = c => [...new Set((c.orders || []).map(o => String(o.products || "").trim()).filter(Boolean))].join(", ");
   const ordWord = c => (String(c.orders_label || "").includes(",") ? "הזמנות " : "הזמנה ") + c.orders_label;
 
   // "what happened" line, same wording as the WhatsApp template (msgs() in the dashboard)
@@ -170,19 +164,18 @@
 
   // ---------- SMS: a short one-way notification; the email has the details ----------
   // Hebrew SMS = UCS-2: 70 characters for one message, 67 per part when longer. Aim: 2 parts at most.
-  // Wording v2 (15.11.2026): one detail per line, every line starts with a Hebrew word (a line starting with
-  // "Smiley" or a number flips direction on the phone), the link alone on the last line. No "חוב".
   function sms(c, stage, ctx) {
-    const n = c.first_name || "", L = c.short_link || c.payment_link, d = shortDate(ctx.due);
-    const mail = ctx.hasEmail !== false, o = ordTxt(c), pr = product(c), a = amt(c);
-    const P = pr ? `\nמוצר: ${pr}` : "";
+    const n = c.first_name || "", L = c.short_link || c.payment_link, d = shortDate(ctx.due), left = daysWord(daysTo(ctx.due, ctx.now) ?? 3);
+    const mail = ctx.hasEmail !== false;
     const RLM = String.fromCharCode(0x200F);                  // invisible right-to-left mark (U+200F)
     return RLM + {
-      1: `שלום ${n},\nכאן מחלקת הכספים של Smiley.\nהתשלום על ${o} לא הושלם.${P}\nסכום: ${a}\n${mail ? "הפרטים המלאים נשלחו אליך במייל." : "לשאלות: collections@try-smiley.com"}\nלהשלמת התשלום עד ${d}:\n${L}`,
-      2: `שלום ${n}, תזכורת מ-Smiley.\nהתשלום על ${o} עדיין לא הושלם.${P}\nסכום: ${a}\nלהשלמה עד ${d}:\n${L}`,
-      3: mail ? `שלום ${n},\nשלחנו אליך במייל מכתב רשמי בנוגע ל${o}.\nסכום לתשלום: ${a}\nלהסדרה עד ${d}:\n${L}`
-              : `שלום ${n},\nהתשלום על ${o} עדיין לא הוסדר.${P}\nסכום לתשלום: ${a}\nלהסדרה עד ${d}:\n${L}`,
-      4: `שלום ${n},\nזו ההודעה האחרונה מ-Smiley בנוגע ל${o}.${P}\nיתרה לתשלום: ${a}\nלהסדרה עד ${d}:\n${L}`,
+      1: mail ? `Smiley: שלום ${n}, חוב פתוח על שמך בסך ${c.total}. כל הפרטים נשלחו אליך למייל. לתשלום עד ${d}:\n${L}`
+              : `Smiley: שלום ${n}, חוב פתוח על שמך בסך ${c.total} (הזמנה ${c.orders_label}). לתשלום מאובטח עד ${d}:\n${L}`,
+      2: mail ? `Smiley: תזכורת, החוב בסך ${c.total} לא הוסדר. הפרטים במייל. לתשלום עד ${d}:\n${L}`
+              : `Smiley: תזכורת, החוב בסך ${c.total} לא הוסדר. לתשלום עד ${d}:\n${L}`,
+      3: mail ? `Smiley: נשלח אליך למייל מכתב התראה רשמי, חוב ${c.total}. להסדרה עד ${d}:\n${L}`
+              : `Smiley: נשלח אליך מכתב התראה רשמי בנוגע לחוב בסך ${c.total}. להסדרה עד ${d}:\n${L}`,
+      4: `Smiley: נותרו ${left} להסדרת החוב בסך ${c.total}. אחרי ${d} לא תישלח פנייה נוספת:\n${L}`,
     }[stage];
   }
   const shortDate = due => String(due || "").replace(/^(\d\d)[./](\d\d)[./]\d{4}$/, "$1.$2");
@@ -203,5 +196,5 @@
              sms: sm, smsInfo: segs(sm), statusAfter: STATUS_AFTER[stage] };
   }
 
-  root.CMS_T = { render, segs, NAMES, STATUS_AFTER, local, ordTxt, amt, product };
+  root.CMS_T = { render, segs, NAMES, STATUS_AFTER, local };
 })(typeof window !== "undefined" ? window : globalThis);
