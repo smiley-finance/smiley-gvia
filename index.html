@@ -1493,13 +1493,13 @@ function openEmail(phone){
       <h3>4 השלבים</h3>
       <div class="stg">${[1, 2, 3, 4].map(s => { const g = sentStage(s), e = g && g.find(m => m.channel === "email"), m = g && g.find(m => m.channel === "sms");
         return `<div class="sr ${g ? "done" : t.next === s && !t.closed && !t.waiting ? "nx" : ""}"><b>${g ? "✓" : s}</b><div class="sx"><div>שלב ${s} · ${CMS_T.NAMES[s]}</div>
-          <div class="mute">${g ? `נשלח ${hm(g[g.length - 1].at)} · 📧 ${DLV(e && e.status)} · 💬 ${DLV(m && m.status)} · מועד ללקוח ${esc(g[0].due || "")}`
+          <div class="mute">${g ? `נשלח ${hm(g[g.length - 1].at)} · 📧 ${DLV(e && e.status, e)} · 💬 ${DLV(m && m.status, m)} · מועד ללקוח ${esc(g[0].due || "")}`
             : t.next === s ? (s === 1 ? "ממתין לשליחה ידנית" : t.blocked ? "⏱ " + t.blocked : "⏱ אוטומטי · " + t.sendAtText) : s > 1 ? "⏱ אוטומטי" : "עוד לא"}</div></div>
           ${g ? RSB(phone, s, "email") + RSB(phone, s, "sms") : ""}<button class="btn sm" data-es="${s}">${g ? "תצוגה" : "תצוגה ושליחה"}</button></div>`; }).join("")}</div>
       <h3>מיילים ו-SMS שנשלחו</h3>
       <div class="mlog">${mine.map(m => `<div class="m"><b>${CH[m.channel]}</b> שלב ${m.stage} · ${esc(CMS_T.NAMES[m.stage])}
         <span class="mute">${hm(m.at)} · ${esc(m.channel === "sms" ? local(m.to) : m.to)}</span>
-        <span class="chip ${MST[m.status][1]} st">${MST[m.status][0]}</span>${m.error ? `<div class="er" style="width:100%">${esc(m.error)}</div>` : ""}</div>`).join("") || `<p class="mute">עוד לא נשלחו מיילים או SMS לתיק הזה.</p>`}</div>
+        <span class="chip ${MST[m.status][1]} st">${MST[m.status][0]}</span>${WHY(m) ? `<div class="er" style="width:100%" title="${esc(m.error || "")}">${esc(WHY(m))}</div>` : ""}</div>`).join("") || `<p class="mute">עוד לא נשלחו מיילים או SMS לתיק הזה.</p>`}</div>
       <h3>היסטוריית מייל / SMS</h3>
       ${ev.map(e => `<div class="ev"><b>${esc(e.status)}</b> · ${new Date(e.at).toLocaleString("he-IL")}${e.note ? "\n" + esc(e.note) : ""}</div>`).join("") || `<p class="mute">אין עדיין.</p>`}
       <h3>הזמנות ומשלוחים</h3>
@@ -1610,13 +1610,29 @@ const msgBad = (m, all) => BADST(m.status)
   && (m.channel === "email" ||
   !all.some(x => x.phone === m.phone && x.stage === m.stage && x.channel === "email" && !BADST(x.status)));
 const custBad = phone => MSGS.some((m, _, a) => m.phone === phone && msgBad(m, a));
-const SMSSOFT = `<span class="mute" title="ה-SMS לא נמסר, המייל נמסר (תזכורת בלבד)">✕</span>`;
+// why a message failed, in plain words (hover on ✕ / ↩, and a small line in the log). The raw provider text stays in the tooltip.
+function WHY(m){
+  if (!m || !BADST(m.status)) return "";
+  const e = String(m.error || "");
+  if (/205|undelivered/i.test(e)) return "המספר לא קיבל את ה-SMS: הטלפון כבוי, המספר מנותק או חוסם הודעות. לא לשלוח שוב, לבדוק את המספר";
+  if (/בבדיקה|UNDER_REVIEW/i.test(e)) return "חשבון ה-SMS היה מושהה אצל Sendy. אפשר לשלוח שוב";
+  if (/קרדיט|CREDITS/i.test(e)) return "נגמר הקרדיט בחשבון ה-SMS";
+  if (/לא תקין|INVALID_RECIPIENT|INVALID_PHONE/i.test(e)) return "מספר הטלפון לא תקין";
+  if (/דחה את הכתובת|5\.1\.1|5\.1\.10|Invalid Recipient|Recipient rejected|does not exist|User unknown|No such user|address not found/i.test(e)) return "כתובת המייל לא קיימת. לתקן את הכתובת";
+  if (/5\.2\.2|mailbox full|quota|over quota/i.test(e)) return "תיבת המייל של הלקוח מלאה";
+  if (/5\.7\.|spam|blocked|rejected/i.test(e)) return "שרת המייל של הלקוח חסם את ההודעה";
+  if (/Gmail|SMTP|ECONN|timeout/i.test(e)) return "תקלה בשליחה מצד Gmail. אפשר לנסות שוב";
+  return e || (m.status === "bounced" ? "המייל חזר" : "השליחה נכשלה");
+}
+const tip = (m, base) => esc(WHY(m) ? WHY(m) + (m.error ? " · " + m.error : "") : base);
+const SMSSOFT = m => `<span class="mute" title="${tip(m, "ה-SMS לא נמסר, המייל נמסר (תזכורת בלבד)")}">✕</span>`;
+const lastMsg = (phone, ch) => MSGS.filter(m => m.phone === phone && m.channel === ch).sort((a, b) => b.at.localeCompare(a.at))[0];
 // backup send: the channel of a stage that failed and was not sent again yet (empty = nothing to resend)
 const canResend = (phone, stage, ch) => { const g = MSGS.filter(m => m.phone === phone && m.stage === stage && m.channel === ch);
   return g.length > 0 && g.every(m => BADST(m.status)); };
 const RSB = (phone, stage, ch) => canResend(phone, stage, ch)
   ? `<button class="btn sm rs" data-resend="${phone}|${stage}|${ch}" title="שליחה חוזרת של ה${ch === "email" ? "מייל" : "-SMS"} בלבד">🔁 ${ch === "email" ? "מייל" : "SMS"} שוב</button>` : "";
-const DLV = s => s === "delivered" ? `<span class="okk" title="נמסר">✓</span>` : s === "failed" ? `<span class="er" title="נכשל">✕</span>` : s === "bounced" ? `<span class="er" title="המייל חזר: כתובת שגויה?">↩</span>` : s ? `<span class="wn" title="נשלח, ממתין לאישור מסירה">…</span>` : `<span class="mute">–</span>`;
+const DLV = (s, m) => s === "delivered" ? `<span class="okk" title="נמסר">✓</span>` : s === "failed" ? `<span class="er" title="${tip(m, "נכשל")}">✕</span>` : s === "bounced" ? `<span class="er" title="${tip(m, "המייל חזר: כתובת שגויה?")}">↩</span>` : s ? `<span class="wn" title="נשלח, ממתין לאישור מסירה">…</span>` : `<span class="mute">–</span>`;
 const ago = d => { const n = Math.floor((Date.now() - d) / 864e5); return n <= 0 ? "היום" : n === 1 ? "אתמול" : `לפני ${n} ימים`; };
 const inD = d => { const n = Math.ceil((d - Date.now()) / 864e5); return n <= 1 ? "מחר" : `בעוד ${n} ימים`; };
 // where the customer is + what comes next and when (email/SMS flow)
@@ -1639,7 +1655,7 @@ function tracking(){
       <div class="tt"><b>${esc(c.name)}</b><b>${esc(c.total)}</b></div>
       <div class="mute ph">${esc(local(c.phone))}${c.email ? "" : " · אין מייל"}</div>
       ${phaseLine(t)}
-      ${t.lastAt ? `<div class="tl">נשלח ${ago(t.lastAt)} · 📧 ${DLV(t.email)} · 💬 ${t.sms === "failed" && !BADST(t.email) && t.email ? SMSSOFT : DLV(t.sms)}</div>` : t.stage ? `<div class="tl mute">סומן ידנית בסטטוס המייל</div>` : `<div class="tl mute">${c.latest && jday(c.latest) === today ? "🆕 נכנס היום" : "עוד לא נשלח דבר"}</div>`}
+      ${t.lastAt ? `<div class="tl">נשלח ${ago(t.lastAt)} · 📧 ${DLV(t.email, lastMsg(c.phone, "email"))} · 💬 ${t.sms === "failed" && !BADST(t.email) && t.email ? SMSSOFT(lastMsg(c.phone, "sms")) : DLV(t.sms, lastMsg(c.phone, "sms"))}</div>` : t.stage ? `<div class="tl mute">סומן ידנית בסטטוס המייל</div>` : `<div class="tl mute">${c.latest && jday(c.latest) === today ? "🆕 נכנס היום" : "עוד לא נשלח דבר"}</div>`}
       ${custBad(c.phone) ? `<div class="tl er">⚠ מייל חזר: לבדוק כתובת</div>` : ""}
       ${t.next ? t.manualDue ? `<div class="tn"><span class="er">לשלוח שלב 1 עכשיו</span><button class="btn send sm" data-tsend="${c.phone}|1">📧💬 שלח</button></div>`
         : ""
@@ -1681,8 +1697,8 @@ function tracking(){
         <td>${new Date(g.at).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
         <td><b>${esc(name(g.phone))}</b><br><span class="mute">${esc(local(g.phone))}</span></td>
         <td>${g.stage} · ${esc(CMS_T.NAMES[g.stage])}</td>
-        <td>${e ? `${DLV(e.status)} <span class="mute">${esc(e.to)}</span>${e.error ? `<br><span class="er">${esc(e.error)}</span>` : ""}${RSB(g.phone, g.stage, "email") ? "<br>" + RSB(g.phone, g.stage, "email") : ""}` : `<span class="mute">לא נשלח</span>`}</td>
-        <td>${s ? `${s.status === "failed" && e && !BADST(e.status) ? SMSSOFT : DLV(s.status)} <span class="mute">${s.parts ? s.parts + " חלקים" : ""}</span>${RSB(g.phone, g.stage, "sms") ? "<br>" + RSB(g.phone, g.stage, "sms") : ""}` : `<span class="mute">לא נשלח</span>`}</td>
+        <td>${e ? `${DLV(e.status, e)} <span class="mute">${esc(e.to)}</span>${WHY(e) ? `<br><span class="er" style="font-size:12px" title="${esc(e.error || "")}">${esc(WHY(e))}</span>` : ""}${RSB(g.phone, g.stage, "email") ? "<br>" + RSB(g.phone, g.stage, "email") : ""}` : `<span class="mute">לא נשלח</span>`}</td>
+        <td>${s ? `${s.status === "failed" && e && !BADST(e.status) ? SMSSOFT(s) : DLV(s.status, s)} <span class="mute">${s.parts ? s.parts + " חלקים" : ""}</span>${WHY(s) ? `<br><span class="mute" style="font-size:12px" title="${esc(s.error || "")}">${esc(WHY(s))}</span>` : ""}${RSB(g.phone, g.stage, "sms") ? "<br>" + RSB(g.phone, g.stage, "sms") : ""}` : `<span class="mute">לא נשלח</span>`}</td>
         <td>${esc((e || s || {}).due || "")}</td></tr>`; }).join("") || `<tr><td colspan="6" class="mute">אין שליחות בטווח הזה.</td></tr>`}
       </table></div>
     </div>`;
@@ -1844,7 +1860,7 @@ function timeline(c){
     ...WAEV.filter(e => e.phone === c.phone && !String(e.status).startsWith("שולם")).map(e => ({ at: e.at, f: "wa", tag: "💬 וואטסאפ", what: e.status, note: e.note })),
     ...Object.values(MSGS.filter(m => m.phone === c.phone).reduce((g, m) => { const k = m.stage + "|" + m.at.slice(0, 16); (g[k] = g[k] || []).push(m); return g; }, {}))
       .map(g => ({ at: g[0].at, f: "em", tag: "📧 מייל + SMS", what: `שלב ${g[0].stage} · ${CMS_T.NAMES[g[0].stage]}`,
-        note: g.map(m => `${m.channel === "email" ? "מייל" : "SMS"}: ${MST[m.status][0]}${m.error ? " (" + m.error + ")" : ""}`).join(" · "), bad: g.some(m => msgBad(m, g)) })),
+        note: g.map(m => `${m.channel === "email" ? "מייל" : "SMS"}: ${MST[m.status][0]}${WHY(m) ? " (" + WHY(m) + ")" : ""}`).join(" · "), bad: g.some(m => msgBad(m, g)) })),
     ...CEV.filter(e => e.phone === c.phone && !String(e.note || "").startsWith("📧💬")).map(e => ({ at: e.at, f: "em", tag: "📧 מייל + SMS", what: "סטטוס: " + e.status, note: e.note, bad: String(e.note || "").includes("⚠") })),
     ...PAYS.filter(p => p.phone === c.phone && p.amount > 0).map(p => ({ at: p.paid_at, f: "pay", tag: "💰 תשלום", what: `שולם ${ils(p.amount)}`, note: "אומת ב-Stripe" })),
   ].filter(x => !CF.hf || x.f === CF.hf || x.f === "pay").sort((a, b) => b.at.localeCompare(a.at));
