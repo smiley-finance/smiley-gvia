@@ -8,7 +8,8 @@
 // (a scheduler runs every 15 minutes on the server: autoPick() says what is due now).
 // Sending window for every stage: Sunday-Thursday, 08:00-20:00 Israel time. Never Friday or Saturday.
 //
-// ctx = { log: [messages of this case], now: Date, ignoreQuiet: bool (test only) }
+// ctx = { log: [messages of this case], now: Date, ignoreQuiet: bool (test only),
+//         only: "email"|"sms" = BACKUP SEND: resend just that channel of a stage that already went out, because it failed }
 // log rows look like the planned table cms_messages:
 //   { id, phone, stage, channel: "email"|"sms", to, subject, body, due, status: "queued"|"sent"|"delivered"|"failed"|"bounced", error, at }
 (function (root) {
@@ -98,8 +99,20 @@
     if (st === HOLD) errors.push("התיק בבדיקה/המתנה");
     if (c.status && c.status !== "חדש") warnings.push(`לידיעה: בוואטסאפ הלקוח בסטטוס "${c.status}" (זרימה נפרדת)`);
     // 2. the stage
-    if (sent(stage)) errors.push(`שלב ${stage} כבר נשלח ללקוח הזה`);
-    if (log.some(m => m.status !== "failed" && ilDay(m.at) === il(now).day)) errors.push("כבר נשלחה ללקוח הודעה היום. שלב אחד ביום לכל היותר");
+    const only = ctx.only === "email" || ctx.only === "sms" ? ctx.only : null;
+    const bad = st2 => st2 === "failed" || st2 === "bounced";
+    if (only) {
+      // backup send: the stage went out, but this one channel failed. Resend only it, same texts and deadline.
+      const mine = log.filter(m => m.stage === stage && m.channel === only);
+      if (!log.some(m => m.stage === stage)) errors.push(`שלב ${stage} עוד לא נשלח. שליחה חוזרת רק לשלב שכבר יצא`);
+      else if (mine.some(m => !bad(m.status))) errors.push(`ה${only === "email" ? "מייל" : "-SMS"} של שלב ${stage} נשלח / נמסר: אין מה לשלוח שוב`);
+      else if (!mine.length) errors.push(`בשלב ${stage} לא נשלח ${only === "email" ? "מייל" : "SMS"} בכלל`);
+      if (only === "email" && mine.some(m => m.status === "bounced" && String(m.to || "").toLowerCase() === String(c.email || "").toLowerCase()))
+        errors.push("המייל חזר מהכתובת הזו (כתובת שגויה). קודם לתקן את כתובת המייל של הלקוח");
+    } else {
+      if (sent(stage)) errors.push(`שלב ${stage} כבר נשלח ללקוח הזה`);
+      if (log.some(m => m.status !== "failed" && ilDay(m.at) === il(now).day)) errors.push("כבר נשלחה ללקוח הודעה היום. שלב אחד ביום לכל היותר");
+    }
     if (stage === 2 && st === "חדש" && !sent(1)) errors.push("קודם לשלוח את הפנייה הראשונה (שלב 1)");
     if (stage === 3 && !c.letter_path) errors.push("מכתב ההתראה עוד לא מוכן (אין PDF)");
     if (stage === 4 && st !== "נשלח מכתב התראה" && !sent(3)) errors.push("קודם לשלוח את מכתב ההתראה (שלב 3)");
@@ -107,17 +120,21 @@
     const q = quiet(now);
     if (q) (ctx.ignoreQuiet ? warnings : errors).push(q + (ctx.ignoreQuiet ? " (מצב בדיקה: מתעלמים)" : ""));
     // 4. the channels
-    const email = validEmail(c.email), sms = validPhone(c.phone);
-    if (!email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
-    if (!sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
-    if (!email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
+    let email = validEmail(c.email), sms = validPhone(c.phone);
+    const hasEmail = email;                                         // the texts still say "we also emailed you" on an SMS-only resend
+    if (only === "email") { if (!email) errors.push("אין כתובת מייל תקינה ללקוח"); sms = false; }
+    if (only === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין"); email = false; }
+    if (!only && !email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
+    if (!only && !sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
+    if (!only && !email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
     if (log.some(m => m.channel === "email" && (m.status === "failed" || m.status === "bounced"))) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
 
-    const due = dueFor(c, stage, log, now);
-    const msg = T.render(c, stage, { due, hasEmail: email, now });
+    const prev = only && log.find(m => m.stage === stage && m.due);
+    const due = prev ? prev.due : dueFor(c, stage, log, now);         // a resend keeps the deadline the customer already got
+    const msg = T.render(c, stage, { due, hasEmail, now });
     if (msg.smsInfo.parts > 2) warnings.push(`ה-SMS ארוך: ${msg.smsInfo.parts} חלקים`);
     return { ok: errors.length === 0, errors, warnings, stage, due, channels: { email, sms },
-             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage] };
+             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only };
   }
 
   // where a customer stands in the 4 stages, and when the next one is due (same days as the WhatsApp flow):

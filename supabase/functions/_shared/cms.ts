@@ -66,7 +66,7 @@ export async function loadOpenCases(sb: SupabaseClient): Promise<Case[]> {
   return (cs || []).map((c: Case) => merge(c, E.get(c.phone)));
 }
 export async function loadLog(sb: SupabaseClient, phone?: string): Promise<Case[]> {
-  let q = sb.from("cms_messages").select("id,phone,stage,channel,status,due,at");
+  let q = sb.from("cms_messages").select("id,phone,stage,channel,status,due,at,to");
   if (phone) q = q.eq("phone", phone);
   const { data, error } = await q;
   if (error) throw error;
@@ -75,9 +75,9 @@ export async function loadLog(sb: SupabaseClient, phone?: string): Promise<Case[
 
 // ---------- send one stage to one customer: the same steps the mock plays (fake-sb.js cmsSend) ----------
 export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
-  o: { log: Case[]; now: Date; auto: boolean; by: string | null; ignoreQuiet?: boolean }) {
+  o: { log: Case[]; now: Date; auto: boolean; by: string | null; ignoreQuiet?: boolean; only?: "email" | "sms" }) {
   if (!sendingOn) return { ok: false, errors: ["השליחה כבויה בשרת (CMS_SENDING לא מופעל). שום הודעה לא יוצאת."], warnings: [], stage, sent: [], failed: [] };
-  const plan = R.plan(c, stage, { log: o.log, now: o.now, ignoreQuiet: !!o.ignoreQuiet && testMode });
+  const plan = R.plan(c, stage, { log: o.log, now: o.now, ignoreQuiet: !!o.ignoreQuiet && testMode, only: o.only });
   const useSms = plan.channels.sms && smsReady();
   if (plan.channels.email && !emailReady()) plan.errors.push("המייל עוד לא מחובר (חסרים GMAIL_USER / GMAIL_APP_PASSWORD)");
   if (plan.channels.sms && !smsReady()) plan.warnings.push("ה-SMS עוד לא מחובר: יישלח מייל בלבד");
@@ -122,6 +122,16 @@ export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
 
   // 3. move the email/SMS status (never the WhatsApp one) + history, only if something went out
   const how = sent.map(x => x === "email" ? "מייל" : "SMS").join(" + ");
+  if (o.only) {
+    // backup send of one channel: the stage already moved the status, so only the history and "last touched" change
+    const now = new Date().toISOString();
+    const { data: cur } = await sb.from("cms_cases").select("email_status").eq("phone", c.phone).maybeSingle();
+    if (sent.length) await sb.from("cms_cases").update({ email_last_at: now, updated_at: now }).eq("phone", c.phone);
+    await sb.from("cms_events").insert({ phone: c.phone, status: cur?.email_status || c.email_status, by_email: o.by,
+      note: sent.length ? `🔁 שלב ${stage}: נשלח שוב (${how} בלבד) · מועד אחרון ${plan.due}` : `⚠ שלב ${stage}: השליחה החוזרת נכשלה (${failed.join(", ")})` });
+    return { ok: sent.length > 0, errors: sent.length ? [] : ["השליחה החוזרת נכשלה, ראו ביומן ההודעות"], warnings: plan.warnings,
+             stage, sent, failed, statusAfter: cur?.email_status || c.email_status, due: plan.due, only: o.only };
+  }
   if (sent.length) {
     const now = new Date().toISOString();
     const { data: cur } = await sb.from("cms_cases").select("email_touched_at").eq("phone", c.phone).maybeSingle();
