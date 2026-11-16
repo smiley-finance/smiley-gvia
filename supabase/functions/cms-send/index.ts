@@ -1,6 +1,7 @@
 // CMS · cms-send
 // 1. Agent clicks "שלח" in the dashboard:  SB.functions.invoke("cms-send", { body: { phone, stage } })  (logged-in agent)
 //    Backup send of one failed channel:     { phone, stage, only: "email" | "sms" }
+//    Email only (agent's choice, no SMS):   { phone, stage, email_only: true }
 // 2. The scheduler (pg_cron, every 15 min):  POST {"auto": true} with header x-cms-cron = CRON_SECRET
 //    -> sends every stage 2-4 that is due now, inside the window (Sun-Thu 08:00-20:00 Israel time, no holidays).
 // Every send runs the same rules as the dashboard (send.js plan()), so the server can't be talked into skipping one.
@@ -71,9 +72,10 @@ Deno.serve(async (req) => {
   // backup send: {only: "email"|"sms"} resends just that channel of a stage whose send failed (send.js plan() checks it)
   const only = body.only === "email" || body.only === "sms" ? body.only : undefined;
   if (body.only !== undefined && !only) return json(req, { ok: false, error: "ערוץ לא תקין" }, 400);
+  const emailOnly = body.email_only === true && !only;      // "email only" box in the send window: this send goes out without SMS
   const c = await loadCase(sb, phone);
   if (!c) return json(req, { ok: false, error: "התיק לא נמצא" }, 404);
   // ignore_quiet works ONLY in test mode (CMS_TEST_TO set). Live, the window can't be skipped from the page.
-  const r = await sendStage(sb, c, stage, { log: await loadLog(sb, phone), now, auto: false, by, ignoreQuiet: !!body.ignore_quiet, only });
+  const r = await sendStage(sb, c, stage, { log: await loadLog(sb, phone), now, auto: false, by, ignoreQuiet: !!body.ignore_quiet, only, emailOnly });
   return json(req, { ...r, error: r.ok ? null : r.errors.join(" · ") });
 });

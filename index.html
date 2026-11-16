@@ -222,7 +222,8 @@
 // Sending window for every stage: Sunday-Thursday, 08:00-20:00 Israel time. Never Friday or Saturday.
 //
 // ctx = { log: [messages of this case], now: Date, ignoreQuiet: bool (test only),
-//         only: "email"|"sms" = BACKUP SEND: resend just that channel of a stage that already went out, because it failed }
+//         only: "email"|"sms" = BACKUP SEND: resend just that channel of a stage that already went out, because it failed,
+//         emailOnly: bool = the agent chose "email only" for this send: no SMS goes out (the stage itself moves as usual) }
 // log rows look like the planned table cms_messages:
 //   { id, phone, stage, channel: "email"|"sms", to, subject, body, due, status: "queued"|"sent"|"delivered"|"failed"|"bounced", error, at }
 (function (root) {
@@ -337,9 +338,11 @@
     const hasEmail = email;                                         // the texts still say "we also emailed you" on an SMS-only resend
     if (only === "email") { if (!email) errors.push("אין כתובת מייל תקינה ללקוח"); sms = false; }
     if (only === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין"); email = false; }
-    if (!only && !email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
-    if (!only && !sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
-    if (!only && !email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
+    const emailOnly = !only && !!ctx.emailOnly;                    // agent's choice in the send window: email only, no SMS
+    if (emailOnly) { if (!email) errors.push("אין כתובת מייל תקינה: אי אפשר לשלוח מייל בלבד"); sms = false; }
+    if (!only && !emailOnly && !email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
+    if (!only && !emailOnly && !sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
+    if (!only && !emailOnly && !email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
     if (log.some(m => m.channel === "email" && (m.status === "failed" || m.status === "bounced"))) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
 
     const prev = only && log.find(m => m.stage === stage && m.due);
@@ -347,7 +350,7 @@
     const msg = T.render(c, stage, { due, hasEmail, now });
     if (msg.smsInfo.parts > 2) warnings.push(`ה-SMS ארוך: ${msg.smsInfo.parts} חלקים`);
     return { ok: errors.length === 0, errors, warnings, stage, due, channels: { email, sms },
-             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only };
+             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only, emailOnly };
   }
 
   // where a customer stands in the 4 stages, and when the next one is due (same days as the WhatsApp flow):
@@ -1526,10 +1529,11 @@ function openEmail(phone){
   });
 }
 function closeEmail(){ EP = null; $("#ep").classList.add("hide"); }
-async function openSend(phone, stage, only){        // only = "email" | "sms": backup send of that channel alone
+async function openSend(phone, stage, only, emailOnly){   // only = "email" | "sms": backup send of that channel alone · emailOnly = "email only" box ticked
   const c = ALLCASES.find(x => x.phone === phone); if (!c) return;
   const { data: log } = await SB.from("cms_messages").select("*").eq("phone", phone);
-  const pl = CMS_SEND.plan(c, stage, { log: log || [], ignoreQuiet: TESTQ(), only }), m = pl.msg;
+  const pl = CMS_SEND.plan(c, stage, { log: log || [], ignoreQuiet: TESTQ(), only, emailOnly: !only && !!emailOnly }), m = pl.msg;
+  const eo = !!pl.emailOnly, goTxt = only ? `🔁 שלח שוב: ${only === "email" ? "📧 מייל" : "💬 SMS"}` : eo ? "📧 שלח מייל עכשיו" : "📧💬 שלח עכשיו";
   const onlyName = only === "email" ? "📧 מייל" : only === "sms" ? "💬 SMS" : "";
   const li = (cls, t) => `<li class="${cls}">${cls === "er" ? "⛔" : cls === "wn" ? "⚠️" : "✓"} ${esc(t)}</li>`;
   $("#sbox").innerHTML = `
@@ -1538,7 +1542,8 @@ async function openSend(phone, stage, only){        // only = "email" | "sms": b
       <div class="sl">
         <h4>נשלח אל</h4>
         <div>${pl.to.email ? "📧 " + esc(pl.to.email) : `<span class="${only ? "mute" : "wn"}">📧 לא יישלח מייל</span>`}</div>
-        <div>${pl.to.sms ? "💬 " + esc(local(pl.to.sms)) : `<span class="${only ? "mute" : "wn"}">💬 לא יישלח SMS</span>`}</div>
+        <div>${pl.to.sms ? "💬 " + esc(local(pl.to.sms)) : `<span class="${only || eo ? "mute" : "wn"}">💬 לא יישלח SMS${eo ? " (נבחר מייל בלבד)" : ""}</span>`}</div>
+        ${only ? "" : `<label class="eo" style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer;font-weight:600"><input type="checkbox" id="seo" ${eo ? "checked" : ""} style="width:18px;height:18px;accent-color:var(--p,#7b56de)"> 📧 לשלוח מייל בלבד (בלי SMS)</label>`}
         <h4>בדיקות</h4>
         <ul class="chk">${pl.errors.map(e => li("er", e)).join("")}${pl.warnings.map(w => li("wn", w)).join("")}${pl.ok && !pl.warnings.length ? li("okk", "הכל תקין") : ""}</ul>
         <h4>אחרי השליחה</h4>
@@ -1553,21 +1558,22 @@ async function openSend(phone, stage, only){        // only = "email" | "sms": b
       </div>
     </div>
     <div class="sf">
-      <button class="btn send big" id="sgo" ${pl.ok ? "" : "disabled style='opacity:.45;cursor:not-allowed'"}>${only ? `🔁 שלח שוב: ${onlyName}` : "📧💬 שלח עכשיו"}</button>
+      <button class="btn send big" id="sgo" ${pl.ok ? "" : "disabled style='opacity:.45;cursor:not-allowed'"}>${goTxt}</button>
       <button class="btn" id="sx2">ביטול</button>
-      <span class="mute" style="font-size:13px">${!pl.ok ? "אי אפשר לשלוח: ראו את הבדיקות מימין." : only ? `הלחיצה שולחת ללקוח ${onlyName} אמיתי, רק את הערוץ הזה.` : "הלחיצה שולחת ללקוח מייל ו-SMS אמיתיים."}</span>
+      <span class="mute" style="font-size:13px">${!pl.ok ? "אי אפשר לשלוח: ראו את הבדיקות מימין." : only ? `הלחיצה שולחת ללקוח ${onlyName} אמיתי, רק את הערוץ הזה.` : eo ? "הלחיצה שולחת ללקוח מייל אמיתי בלבד. SMS לא יישלח." : "הלחיצה שולחת ללקוח מייל ו-SMS אמיתיים."}</span>
     </div>`;
   if ($("#sif")) $("#sif").srcdoc = m.html;
   $("#sm").classList.remove("hide");
   const close = () => $("#sm").classList.add("hide");
+  if ($("#seo")) $("#seo").onchange = e => openSend(phone, stage, only, e.target.checked);
   $("#sx").onclick = close; $("#sx2").onclick = close; $("#sm").onclick = e => e.target.id === "sm" && close();
   $("#sgo").onclick = async () => {
     if (!pl.ok) return;
     $("#sgo").disabled = true; $("#sgo").textContent = "שולח…";
     // the server (Edge Function cms-send) checks every rule again, sends, logs and moves the email/SMS status
-    const { data, error } = await SB.functions.invoke("cms-send", { body: { phone, stage, ignore_quiet: TESTQ(), ...(only ? { only } : {}) } });
+    const { data, error } = await SB.functions.invoke("cms-send", { body: { phone, stage, ignore_quiet: TESTQ(), ...(only ? { only } : {}), ...(eo ? { email_only: true } : {}) } });
     const why = error ? error.message : data && !data.ok ? data.error || (data.errors || []).join(" · ") : "";
-    if (why) { $("#sgo").textContent = only ? `🔁 שלח שוב: ${onlyName}` : "📧💬 שלח עכשיו"; $("#sgo").disabled = false; await load(); return toast("לא נשלח: " + why); }
+    if (why) { $("#sgo").textContent = goTxt; $("#sgo").disabled = false; await load(); return toast("לא נשלח: " + why); }
     close(); toast(only ? `🔁 שלב ${stage}: ${CH[only]} נשלח שוב` : `שלב ${stage} נשלח: ${data.sent.map(x => CH[x]).join(" + ")}${data.failed && data.failed.length ? ` · נכשל: ${data.failed.map(x => CH[x]).join(" + ")}` : ""} · סטטוס מייל/SMS: ${data.statusAfter}`);
     await load(); if (EP === phone) openEmail(phone);
   };
