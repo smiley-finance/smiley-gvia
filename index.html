@@ -1614,7 +1614,7 @@ const custBad = phone => MSGS.some((m, _, a) => m.phone === phone && msgBad(m, a
 function WHY(m){
   if (!m || !BADST(m.status)) return "";
   const e = String(m.error || "");
-  if (/205|undelivered/i.test(e)) return "המספר לא קיבל את ה-SMS: הטלפון כבוי, המספר מנותק או חוסם הודעות. לא לשלוח שוב, לבדוק את המספר";
+  if (/205|undelivered/i.test(e)) return "ה-SMS לא נמסר על ידי הרשת הסלולרית: חסימה של הרשת, או מספר כבוי / לא זמין. אפשר לשלוח שוב";
   if (/בבדיקה|UNDER_REVIEW/i.test(e)) return "חשבון ה-SMS היה מושהה אצל Sendy. אפשר לשלוח שוב";
   if (/קרדיט|CREDITS/i.test(e)) return "נגמר הקרדיט בחשבון ה-SMS";
   if (/לא תקין|INVALID_RECIPIENT|INVALID_PHONE/i.test(e)) return "מספר הטלפון לא תקין";
@@ -1628,11 +1628,9 @@ const tip = (m, base) => esc(WHY(m) ? WHY(m) + (m.error ? " · " + m.error : "")
 const SMSSOFT = m => `<span class="mute" title="${tip(m, "ה-SMS לא נמסר, המייל נמסר (תזכורת בלבד)")}">✕</span>`;
 const lastMsg = (phone, ch) => MSGS.filter(m => m.phone === phone && m.channel === ch).sort((a, b) => b.at.localeCompare(a.at))[0];
 // backup send: the channel of a stage that failed and was not sent again yet (empty = nothing to resend)
-// No button when resending can't help: an SMS that failed with 205 (the number itself, confirmed by Sendy),
-// or an email that bounced from the address the customer still has (fix the address first, then the button comes back).
+// No button when resending can't help: an email that bounced from the address the customer still has (fix the address first, then the button comes back).
 const canResend = (phone, stage, ch) => { const g = MSGS.filter(m => m.phone === phone && m.stage === stage && m.channel === ch);
   if (!g.length || !g.every(m => BADST(m.status))) return false;
-  if (ch === "sms" && g.every(m => /205|undelivered/i.test(String(m.error || "")))) return false;
   const now = String((ALLCASES.find(c => c.phone === phone) || {}).email || "").toLowerCase();
   if (ch === "email" && g.some(m => m.status === "bounced" && String(m.to || "").toLowerCase() === now)) return false;
   return true; };
