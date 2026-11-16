@@ -5,7 +5,7 @@
 // 2. The scheduler (pg_cron, every 15 min):  POST {"auto": true} with header x-cms-cron = CRON_SECRET
 //    -> sends every stage 2-4 that is due now, inside the window (Sun-Thu 08:00-20:00 Israel time, no holidays).
 // Every send runs the same rules as the dashboard (send.js plan()), so the server can't be talked into skipping one.
-import { admin, agent, json, loadCase, loadLog, loadOpenCases, R, sendStage, env, testMode, sendingOn, isTestRecipient } from "../_shared/cms.ts";
+import { admin, agent, json, loadCase, loadLog, loadOpenCases, R, sendStage, env, testMode, sendingOn, isTestRecipient, switchesOff } from "../_shared/cms.ts";
 
 const MAX_PER_RUN = 40;                                       // stays well inside the function time limit; the rest go next run
 
@@ -39,6 +39,11 @@ Deno.serve(async (req) => {
     if (!sendingOn) {                                         // main switch off: the scheduler does nothing at all
       await sb.from("cms_runs").insert({ kind: "auto", sent: 0, note: "השליחה כבויה (CMS_SENDING)" });
       return json(req, { ok: true, sent: 0, note: "sending off" });
+    }
+    const off = await switchesOff(sb);
+    if (off.email && off.sms) {                               // both channels switched off on the dashboard: nothing to send
+      await sb.from("cms_runs").insert({ kind: "auto", sent: 0, note: "מייל ו-SMS כבויים במתג הראשי" });
+      return json(req, { ok: true, sent: 0, note: "both channels off" });
     }
     const closed = R.quiet(now);
     if (closed) {
