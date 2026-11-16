@@ -1,4 +1,7 @@
 -- CMS: remove everything the CMS added. coll_* tables and the WhatsApp flow are not touched.
+-- live updates (20261116000007): stop announcing changes (settings only)
+do $$ declare t text; begin foreach t in array array['coll_cases','coll_payments','coll_payouts','coll_events','cms_messages','cms_events','cms_cases','cms_switches'] loop
+  if exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename=t) then execute format('alter publication supabase_realtime drop table public.%I', t); end if; end loop; end $$;
 -- (Also delete the Edge Functions cms-send, cms-health, cms-report in the dashboard, and the cms_* vault secrets.)
 select cron.unschedule('cms-bounce') where exists (select 1 from cron.job where jobname = 'cms-bounce');
 select cron.unschedule('cms-auto') where exists (select 1 from cron.job where jobname = 'cms-auto');
