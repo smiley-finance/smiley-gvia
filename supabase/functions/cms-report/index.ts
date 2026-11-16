@@ -49,8 +49,8 @@ Deno.serve(async (req) => {
   await sb.from("cms_messages").update({ status, error: status === "failed" ? `ה-SMS לא נמסר (${d.status}${d.error_code ? ", " + d.error_code : ""})` : null,
     updated_at: new Date().toISOString() }).eq("id", row.id);
   if (status === "failed") {
-    const { data: cur } = await sb.from("cms_cases").select("email_status").eq("phone", row.phone).maybeSingle();
-    await sb.from("cms_events").insert({ phone: row.phone, status: cur?.email_status || null, note: `⚠ ה-SMS של שלב ${row.stage} לא נמסר: לבדוק את המספר` });
+    const { data: cur } = await sb.from("cms_cases").select("email_status,sms_status").eq("phone", row.phone).maybeSingle();
+    await sb.from("cms_events").insert({ phone: row.phone, status: cur?.sms_status || cur?.email_status || null, flow: "sms", note: `⚠ ה-SMS של שלב ${row.stage} לא נמסר: לבדוק את המספר` });
   }
   return new Response("ok", { status: 200 });
 });

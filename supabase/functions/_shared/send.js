@@ -86,22 +86,51 @@
     return fmt(new Date(+now + (stage <= 2 ? 7 : 14) * DAY));
   }
 
+  // ---------- separate flows (16.11.2026): 📧 email and 📱 SMS each have their own stages, status, timer and history ----------
+  // A flow sees ONLY its own channel's messages and its own status (email_status / sms_status). Deadlines stay shared,
+  // so a customer never gets two different dates for the same stage. No flow given = the old shared behaviour.
+  const STOP = ["סגור", DONE, HOLD, "בתהליך"];
+  // sms_status is empty for every case from before the split: it then follows the email status if SMS already went out,
+  // or if the email flow is paused / closed (so the SMS timer never restarts a case the agents stopped). Otherwise "חדש".
+  function smsStatus(c, allLog) {
+    if (c.sms_status) return c.sms_status;
+    const e = c.email_status || "חדש";
+    if (STOP.includes(e)) return e;
+    return allLog.some(m => m.phone === c.phone && m.channel === "sms") ? e : "חדש";
+  }
+  function view(c, allLog, flow) {
+    const mine = allLog.filter(m => m.phone === c.phone);
+    if (flow !== "email" && flow !== "sms") return { c, log: mine };
+    const log = mine.filter(m => m.channel === flow);
+    if (flow === "email") return { c, log };
+    const first = log.slice().sort((a, b) => a.at.localeCompare(b.at))[0];
+    return { log, c: Object.assign({}, c, { email_status: smsStatus(c, allLog),
+      email_touched_at: c.sms_touched_at || (first && first.at) || (c.sms_status ? null : c.email_touched_at) || null,
+      email_last_at: c.sms_last_at || null }) };
+  }
+
   function plan(c, stage, ctx) {
     ctx = ctx || {};
-    const now = ctx.now || new Date(), log = (ctx.log || []).filter(m => m.phone === c.phone);
+    const flow = ctx.flow === "email" || ctx.flow === "sms" ? ctx.flow : null;
+    const all = (ctx.log || []).filter(m => m.phone === c.phone);
+    const V = view(c, all, flow);
+    c = V.c;
+    const now = ctx.now || new Date(), log = V.log;
+    if (flow) ctx = Object.assign({}, ctx, { alone: flow, emailOnly: false });     // a flow sends its own channel only
     const errors = [], warnings = [];
     const sent = s => log.some(m => m.stage === s && m.status !== "failed");
 
     // 1. the case. The email/SMS flow has its OWN status (email_status), separate from the WhatsApp status.
     //    Shared between the flows: the customer details, and a payment verified in Stripe (it ends both).
-    const st = c.email_status || "חדש";
-    if (st === "סגור") errors.push("התיק סגור בזרימת המייל/SMS");
+    const st = c.email_status || "חדש", FN = flow === "sms" ? "ה-SMS" : flow === "email" ? "המייל" : "המייל/SMS";
+    if (st === "סגור") errors.push(`התיק סגור בזרימת ${FN}`);
     if (isPaid(c) || String(c.status).startsWith("שולם")) errors.push("התיק שולם (אומת ב-Stripe)");
     if (st === DONE) errors.push("הלקוח אמר ששילם: ממתינים לאימות התשלום");
     if (st === HOLD) errors.push("התיק בבדיקה/המתנה");
     if (c.status && c.status !== "חדש") warnings.push(`לידיעה: בוואטסאפ הלקוח בסטטוס "${c.status}" (זרימה נפרדת)`);
     // 2. the stage
     const only = ctx.only === "email" || ctx.only === "sms" ? ctx.only : null;
+    if (only && flow && only !== flow) errors.push("שליחה חוזרת רק לערוץ של הזרימה הזו");
     const bad = st2 => st2 === "failed" || st2 === "bounced";
     if (only) {
       // backup send: the stage went out, but this one channel failed. Resend only it, same texts and deadline.
@@ -126,6 +155,8 @@
     const off = ctx.off || {};
     const alone = only ? null : ctx.alone === "email" || ctx.alone === "sms" ? ctx.alone : ctx.emailOnly ? "email" : null;   // agent's choice in the send window
     let hasEmail = email && !(off.email && !only) && alone !== "sms";   // the texts still say "we also emailed you" on an SMS-only resend (not when no email goes out now)
+    // SMS flow: the SMS says "the details are in your email" only if an email of this stage (or earlier) really went out
+    if (flow === "sms") hasEmail = all.some(m => m.channel === "email" && m.stage <= stage && m.status !== "failed" && m.status !== "bounced");
     if (only === "email") { if (!email) errors.push("אין כתובת מייל תקינה ללקוח"); sms = false; }
     if (only === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין"); email = false; }
     if (alone === "email") { if (!email) errors.push("אין כתובת מייל תקינה: אי אפשר לשלוח מייל בלבד"); sms = false; }
@@ -139,21 +170,22 @@
     if ((off.email || off.sms) && !email && !sms && !errors.length) errors.push("אין ערוץ פתוח לשליחה: הערוץ כבוי במתג הראשי");
     if (log.some(m => m.channel === "email" && (m.status === "failed" || m.status === "bounced"))) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
 
-    const prev = only && log.find(m => m.stage === stage && m.due);
-    const due = prev ? prev.due : dueFor(c, stage, log, now);         // a resend keeps the deadline the customer already got
+    const prev = (only && log.find(m => m.stage === stage && m.due)) || (flow && all.find(m => m.stage === stage && m.due));
+    const due = prev ? prev.due : dueFor(c, stage, flow ? all : log, now);   // a resend / the other flow's same stage keeps the deadline the customer already got         // a resend keeps the deadline the customer already got
     const msg = T.render(c, stage, { due, hasEmail, now });
     if (sms && msg.smsInfo.parts > 2) warnings.push(`ה-SMS ארוך: ${msg.smsInfo.parts} חלקים`);
     return { ok: errors.length === 0, errors, warnings, stage, due, channels: { email, sms },
-             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only, alone, emailOnly: alone === "email" };
+             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only, alone, emailOnly: alone === "email", flow, flowStatus: st };
   }
 
   // where a customer stands in the 4 stages, and when the next one is due (same days as the WhatsApp flow):
   // Email/SMS timer (the user's decision 12.11.2026): stage 1 (agent) day 0 -> stage 2 day 3 -> stage 3 letter day 8 -> stage 4 day 11.
   // All counted from the day stage 1 was sent. (The WhatsApp flow keeps its own timing.)
   // Uses ONLY the email/SMS flow: its log and its own status (email_status). The WhatsApp status is not used here.
-  function track(c, allLog, now) {
+  function track(c, allLog, now, flow) {
     now = now || new Date();
-    const log = allLog.filter(m => m.phone === c.phone).sort((a, b) => a.at.localeCompare(b.at));
+    const V = view(c, allLog, flow); c = V.c;
+    const log = V.log.sort((a, b) => a.at.localeCompare(b.at));
     const ok = log.filter(m => m.status !== "failed");
     const at = s => { const m = ok.find(x => x.stage === s); return m ? new Date(m.at) : null; };
     const st = c.email_status || "חדש";
@@ -181,7 +213,7 @@
       email: (lastStage.find(m => m.channel === "email") || {}).status || null,     // delivery of the last stage, per channel
       sms: (lastStage.find(m => m.channel === "sms") || {}).status || null,
       failed: log.some(m => m.status === "failed" || m.status === "bounced"),
-      closed, waiting, talking, status: st, count: log.length,
+      closed, waiting, talking, status: st, count: log.length, flow: flow || null,
     };
   }
 
@@ -189,11 +221,11 @@
   function autoPick(cases, allLog, now, opt) {
     now = now || new Date(); opt = opt || {};
     if (quiet(now) && !opt.ignoreQuiet) return [];
-    return cases.map(c => ({ c, t: track(c, allLog, now) }))
+    return cases.map(c => ({ c, t: track(c, allLog, now, opt.flow) }))
       .filter(({ t }) => t.auto && t.dueNow && !t.blocked)
-      .map(({ c, t }) => ({ c, stage: t.next, plan: plan(c, t.next, { log: allLog, now, ignoreQuiet: opt.ignoreQuiet }) }))
+      .map(({ c, t }) => ({ c, stage: t.next, flow: opt.flow || null, plan: plan(c, t.next, { log: allLog, now, ignoreQuiet: opt.ignoreQuiet, flow: opt.flow, off: opt.off }) }))
       .filter(x => x.plan.ok);
   }
 
-  root.CMS_SEND = { plan, track, autoPick, quiet, holiday, nextWindow, when, validEmail, validPhone, fmt };
+  root.CMS_SEND = { plan, track, autoPick, smsStatus, view, quiet, holiday, nextWindow, when, validEmail, validPhone, fmt };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -57,7 +57,8 @@ export async function agent(sb: SupabaseClient, req: Request): Promise<string | 
 // deno-lint-ignore no-explicit-any
 type Case = Record<string, any>;
 function merge(c: Case, e?: Case | null): Case {
-  return Object.assign(c, { email_status: e?.email_status || "חדש", email_touched_at: e?.email_touched_at || null, email_last_at: e?.email_last_at || null });
+  return Object.assign(c, { email_status: e?.email_status || "חדש", email_touched_at: e?.email_touched_at || null, email_last_at: e?.email_last_at || null,
+    sms_status: e?.sms_status || null, sms_touched_at: e?.sms_touched_at || null, sms_last_at: e?.sms_last_at || null });   // null sms_status: send.js smsStatus()
 }
 export async function loadCase(sb: SupabaseClient, phone: string): Promise<Case | null> {
   const [{ data: c }, { data: e }] = await Promise.all([
@@ -83,9 +84,11 @@ export async function loadLog(sb: SupabaseClient, phone?: string): Promise<Case[
 
 // ---------- send one stage to one customer: the same steps the mock plays (fake-sb.js cmsSend) ----------
 export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
-  o: { log: Case[]; now: Date; auto: boolean; by: string | null; ignoreQuiet?: boolean; only?: "email" | "sms"; alone?: "email" | "sms" }) {
+  o: { log: Case[]; now: Date; auto: boolean; by: string | null; ignoreQuiet?: boolean; only?: "email" | "sms"; alone?: "email" | "sms"; flow?: "email" | "sms" }) {
   if (!sendingOn) return { ok: false, errors: ["השליחה כבויה בשרת (CMS_SENDING לא מופעל). שום הודעה לא יוצאת."], warnings: [], stage, sent: [], failed: [] };
-  const plan = R.plan(c, stage, { log: o.log, now: o.now, ignoreQuiet: !!o.ignoreQuiet && testMode, only: o.only, alone: o.alone, off: await switchesOff(sb) });
+  const plan = R.plan(c, stage, { log: o.log, now: o.now, ignoreQuiet: !!o.ignoreQuiet && testMode, only: o.only, alone: o.alone, flow: o.flow, off: await switchesOff(sb) });
+  // which status columns this send moves: the SMS flow has its own (sms_*), everything else is the email flow (email_*)
+  const P = o.flow === "sms" ? "sms" : "email", FLOW = o.flow || null;
   const useSms = plan.channels.sms && smsReady();
   if (plan.channels.email && !emailReady()) plan.errors.push("המייל עוד לא מחובר (חסרים GMAIL_USER / GMAIL_APP_PASSWORD)");
   if (plan.channels.sms && !smsReady()) plan.warnings.push("ה-SMS עוד לא מחובר: יישלח מייל בלבד");
@@ -133,22 +136,23 @@ export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
   if (o.only) {
     // backup send of one channel: the stage already moved the status, so only the history and "last touched" change
     const now = new Date().toISOString();
-    const { data: cur } = await sb.from("cms_cases").select("email_status").eq("phone", c.phone).maybeSingle();
-    if (sent.length) await sb.from("cms_cases").update({ email_last_at: now, updated_at: now }).eq("phone", c.phone);
-    await sb.from("cms_events").insert({ phone: c.phone, status: cur?.email_status || c.email_status, by_email: o.by,
+    const { data: cur } = await sb.from("cms_cases").select("email_status,sms_status").eq("phone", c.phone).maybeSingle();
+    const curSt = (P === "sms" ? cur?.sms_status || plan.flowStatus : cur?.email_status) || c.email_status;
+    if (sent.length) await sb.from("cms_cases").update({ [P + "_last_at"]: now, updated_at: now }).eq("phone", c.phone);
+    await sb.from("cms_events").insert({ phone: c.phone, status: curSt, by_email: o.by, flow: FLOW,
       note: sent.length ? `🔁 שלב ${stage}: נשלח שוב (${how} בלבד) · מועד אחרון ${plan.due}` : `⚠ שלב ${stage}: השליחה החוזרת נכשלה (${failed.join(", ")})` });
     return { ok: sent.length > 0, errors: sent.length ? [] : ["השליחה החוזרת נכשלה, ראו ביומן ההודעות"], warnings: plan.warnings,
-             stage, sent, failed, statusAfter: cur?.email_status || c.email_status, due: plan.due, only: o.only };
+             stage, sent, failed, statusAfter: curSt, due: plan.due, only: o.only, flow: FLOW };
   }
   if (sent.length) {
     const now = new Date().toISOString();
-    const { data: cur } = await sb.from("cms_cases").select("email_touched_at").eq("phone", c.phone).maybeSingle();
-    await sb.from("cms_cases").upsert({ phone: c.phone, email_status: plan.statusAfter, email_touched_at: cur?.email_touched_at || now, email_last_at: now, updated_at: now });
-    await sb.from("cms_events").insert({ phone: c.phone, status: plan.statusAfter, by_email: o.by,
+    const { data: cur } = await sb.from("cms_cases").select("email_touched_at,sms_touched_at").eq("phone", c.phone).maybeSingle();
+    await sb.from("cms_cases").upsert({ phone: c.phone, [P + "_status"]: plan.statusAfter, [P + "_touched_at"]: cur?.[P + "_touched_at"] || now, [P + "_last_at"]: now, updated_at: now });
+    await sb.from("cms_events").insert({ phone: c.phone, status: plan.statusAfter, by_email: o.by, flow: FLOW,
       note: `${o.auto ? "⏱ נשלח אוטומטית · " : ""}${sent.length === 1 ? (sent[0] === "email" ? "📧" : "💬") : "📧💬"} שלב ${stage} נשלח (${how}${plan.alone ? ` · ${plan.alone === "email" ? "מייל" : "SMS"} בלבד לפי בחירה` : ""}${plan.warnings.some((w: string) => w.includes("מתג הראשי")) ? " · ערוץ כבוי במתג הראשי" : ""}) · מועד אחרון ${plan.due}${failed.length ? " · ⚠ נכשל: " + failed.join(", ") : ""}` });
   } else {
-    await sb.from("cms_events").insert({ phone: c.phone, status: c.email_status, by_email: o.by, note: `⚠ שלב ${stage}: השליחה נכשלה (${failed.join(", ")})` });
+    await sb.from("cms_events").insert({ phone: c.phone, status: plan.flowStatus || c.email_status, by_email: o.by, flow: FLOW, note: `⚠ שלב ${stage}: השליחה נכשלה (${failed.join(", ")})` });
   }
   return { ok: sent.length > 0, errors: sent.length ? [] : ["השליחה נכשלה, ראו ביומן ההודעות"], warnings: plan.warnings,
-           stage, sent, failed, statusAfter: plan.statusAfter, due: plan.due };
+           stage, sent, failed, statusAfter: plan.statusAfter, due: plan.due, flow: FLOW };
 }

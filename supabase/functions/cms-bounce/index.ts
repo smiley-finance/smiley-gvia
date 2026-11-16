@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
       if (dry) continue;
       await sb.from("cms_messages").update({ status: "bounced", error: ("חזר: " + b.why).slice(0, 300), updated_at: new Date().toISOString() }).eq("id", r.id);
       const { data: cur } = await sb.from("cms_cases").select("email_status").eq("phone", r.phone).maybeSingle();
-      await sb.from("cms_events").insert({ phone: r.phone, status: cur?.email_status || null, by_email: null,
+      await sb.from("cms_events").insert({ phone: r.phone, status: cur?.email_status || null, by_email: null, flow: "email",
         note: `⚠ המייל של שלב ${r.stage} חזר (כתובת שגויה?): ${b.why.slice(0, 160)}. ה-SMS לא מושפע. לבדוק את כתובת המייל של הלקוח` });
     }
   }
