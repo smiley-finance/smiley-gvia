@@ -58,6 +58,7 @@
   // ---------- the future Edge Function, played here ----------
   let NEXT_ID = Math.max(0, ...DB.messages.map(m => m.id)) + 1;
   function cmsSend({ p_phone, p_stage, p_ignore_quiet, p_auto, p_flow, p_only }) {
+    if (!p_auto) { const k = DB.cases.find(x => x.phone === p_phone); if (k && !k.agent_touched_at) k.agent_touched_at = new Date().toISOString(); }   // a person clicked: commission mark, see cms.ts markClicker
     const c = DB.cases.find(x => x.phone === p_phone);
     if (!c) return { error: { message: "case not found" } };
     const plan = root.CMS_SEND.plan(c, p_stage, { log: DB.messages, ignoreQuiet: !!p_ignore_quiet, flow: p_flow, only: p_only });

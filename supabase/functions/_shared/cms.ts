@@ -83,6 +83,20 @@ export async function loadLog(sb: SupabaseClient, phone?: string): Promise<Case[
 }
 
 // ---------- send one stage to one customer: the same steps the mock plays (fake-sb.js cmsSend) ----------
+// COMMISSION (16.11.2026, owner's decision): email/SMS are part of the same debt return. A send that a person clicked
+// marks the case as worked by an agent (coll_cases.agent_touched_at), exactly like a WhatsApp status click (coll_set_status):
+// set once (an earlier mark is never moved), never by the timer or a test, never for a manager who does not earn.
+// The payments engine gives commission to a payment whose case had this mark before it was paid.
+export async function markClicker(sb: SupabaseClient, phone: string, by: string | null) {
+  if (!by || by === "test") return;
+  try {
+    const { data: adm } = await sb.from("coll_admins").select("earns").eq("email", by).maybeSingle();
+    if (adm && !adm.earns) return;
+    const now = new Date().toISOString();
+    await sb.from("coll_cases").update({ agent_touched_at: now, updated_at: now }).eq("phone", phone).is("agent_touched_at", null);
+  } catch (_) { /* the send already went out; a failed mark must never fail it */ }
+}
+
 export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
   o: { log: Case[]; now: Date; auto: boolean; by: string | null; ignoreQuiet?: boolean; only?: "email" | "sms"; alone?: "email" | "sms"; flow?: "email" | "sms" }) {
   if (!sendingOn) return { ok: false, errors: ["השליחה כבויה בשרת (CMS_SENDING לא מופעל). שום הודעה לא יוצאת."], warnings: [], stage, sent: [], failed: [] };
@@ -138,7 +152,7 @@ export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
     const now = new Date().toISOString();
     const { data: cur } = await sb.from("cms_cases").select("email_status,sms_status").eq("phone", c.phone).maybeSingle();
     const curSt = (P === "sms" ? cur?.sms_status || plan.flowStatus : cur?.email_status) || c.email_status;
-    if (sent.length) await sb.from("cms_cases").update({ [P + "_last_at"]: now, updated_at: now }).eq("phone", c.phone);
+    if (sent.length) { await sb.from("cms_cases").update({ [P + "_last_at"]: now, updated_at: now }).eq("phone", c.phone); await markClicker(sb, c.phone, o.by); }
     await sb.from("cms_events").insert({ phone: c.phone, status: curSt, by_email: o.by, flow: FLOW,
       note: sent.length ? `🔁 שלב ${stage}: נשלח שוב (${how} בלבד) · מועד אחרון ${plan.due}` : `⚠ שלב ${stage}: השליחה החוזרת נכשלה (${failed.join(", ")})` });
     return { ok: sent.length > 0, errors: sent.length ? [] : ["השליחה החוזרת נכשלה, ראו ביומן ההודעות"], warnings: plan.warnings,
@@ -148,6 +162,7 @@ export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
     const now = new Date().toISOString();
     const { data: cur } = await sb.from("cms_cases").select("email_touched_at,sms_touched_at").eq("phone", c.phone).maybeSingle();
     await sb.from("cms_cases").upsert({ phone: c.phone, [P + "_status"]: plan.statusAfter, [P + "_touched_at"]: cur?.[P + "_touched_at"] || now, [P + "_last_at"]: now, updated_at: now });
+    await markClicker(sb, c.phone, o.by);
     await sb.from("cms_events").insert({ phone: c.phone, status: plan.statusAfter, by_email: o.by, flow: FLOW,
       note: `${o.auto ? "⏱ נשלח אוטומטית · " : ""}${sent.length === 1 ? (sent[0] === "email" ? "📧" : "💬") : "📧💬"} שלב ${stage} נשלח (${how}${plan.alone ? ` · ${plan.alone === "email" ? "מייל" : "SMS"} בלבד לפי בחירה` : ""}${plan.warnings.some((w: string) => w.includes("מתג הראשי")) ? " · ערוץ כבוי במתג הראשי" : ""}) · מועד אחרון ${plan.due}${failed.length ? " · ⚠ נכשל: " + failed.join(", ") : ""}` });
   } else {
