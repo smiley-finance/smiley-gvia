@@ -1271,6 +1271,7 @@ async function load1(bg){
   const first = !LOAD_SIG; LOAD_SIG = sig;
   if (!sw.error) (sw.data || []).forEach(r => { SW[r.channel] = r.is_on !== false; SW[r.channel + "_by"] = r.by_email; SW[r.channel + "_at"] = r.updated_at; });
   MSGS = ms.data || []; CEV = ce.data || []; WAEV = we.data || [];
+  WA_START = {}; WAEV.forEach(e => { if (e.by_email && e.status !== "חדש" && e.status !== "היסטוריה" && !String(e.status).startsWith("שולם") && (!WA_START[e.phone] || e.at < WA_START[e.phone])) WA_START[e.phone] = e.at; });
   // the email/SMS flow keeps its own status in cms_cases (coll_cases is not changed): put it on each case
   const EC = Object.fromEntries((ec.data || []).map(r => [r.phone, r]));
   (c.data || []).forEach(x => { const e = EC[x.phone]; x.email_status = e ? e.email_status : "חדש"; x.email_touched_at = e ? e.email_touched_at : null; x.email_last_at = e ? e.email_last_at : null;
@@ -1296,8 +1297,10 @@ $("#rf").onclick = async () => { const b = $("#rf"); b.classList.add("busy"); b.
 
 // ---------- what to do next (written channel only: WhatsApp) ----------
 // day 0 first message -> day 3 reminder -> day 8 (or a refusal) letter -> 11 days after the letter final reminder -> closed
+// day count of the WhatsApp flow: from its own first step (an email/SMS send also marks the case for commission, see cms.ts)
+let WA_START = {};
 function next(c){
-  const from = days(c.agent_touched_at), last = days(c.last_action_at);
+  const from = days(WA_START[c.phone] || c.agent_touched_at), last = days(c.last_action_at);
   switch (c.status){
     case "חדש": return "לשלוח פנייה ראשונה";
     case "נשלחה הודעה":
@@ -1324,7 +1327,7 @@ function kpis(){
   $("#kpis").innerHTML = `<div class="kpi main"><b>${left}</b><span>לטיפול היום</span>
       <div class="pbar"><i style="width:${pct}%"></i></div><small>טופלו היום: ${done} מתוך ${left + done}</small></div>` + [
     ["תיקים פתוחים", CASES.filter(c => c.status !== "סגור").length + " · " + ils(CASES.filter(c => c.status !== "סגור").reduce((s, c) => s + c.amount / 100, 0))],
-    ["נגבה החודש", ils(mine.reduce((s, p) => s + p.amount - p.refunded, 0))],
+    ["נגבה החודש (כל התשלומים)", ils(PAYS.filter(p => p.month === m).reduce((s, p) => s + p.amount - p.refunded, 0))],
     ["עמלה החודש (20%)", ils(mine.reduce((s, p) => s + Number(p.commission), 0))],
   ].map(([t, v]) => `<div class="kpi"><b>${v}</b><span>${t}</span></div>`).join("");
 }
@@ -1340,7 +1343,7 @@ function waKpis(mine){
     <button class="kpi" data-wk="new"><b>${nw.length}</b><span>חדשים שעוד לא קיבלו כלום</span><small>${nwToday ? `🆕 ${nwToday} נכנסו היום` : "&nbsp;"}</small></button>
     <button class="kpi" data-wk="today"><b>${evToday.length}</b><span>פעולות היום</span><small>${new Set(evToday.map(e => e.phone)).size} לקוחות</small></button>
     <button class="kpi ${notFound ? "bad" : ""}" data-wk="ver"><b>${ver.length}</b><span>ממתינים לאימות תשלום</span><small>${notFound ? `${notFound} לא נמצא תשלום` : "&nbsp;"}</small></button>
-    <button class="kpi" data-wk="pay"><b>${ils(mine.reduce((t, p) => t + p.amount - p.refunded, 0))}</b><span>נגבה החודש</span><small>עמלה ${ils(mine.reduce((t, p) => t + Number(p.commission), 0))}</small></button>`;
+    <button class="kpi" data-wk="pay"><b>${ils(PAYS.filter(p => p.month === ym(today())).reduce((t, p) => t + p.amount - p.refunded, 0))}</b><span>נגבה החודש (כל התשלומים)</span><small>מזה עם עמלה ${ils(mine.reduce((t, p) => t + p.amount - p.refunded, 0))} · עמלה ${ils(mine.reduce((t, p) => t + Number(p.commission), 0))}</small></button>`;
   document.querySelectorAll("[data-wk]").forEach(b => b.onclick = () => {
     const k = b.dataset.wk, setFs = v => { $("#fs").value = v; render(); };
     if (k === "due") { setFs(""); return document.querySelector(".tc.wc.due")?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }); }
@@ -2233,20 +2236,22 @@ function payroll(){
   const rows = months.map(m => {
     const ps = PAYS.filter(p => p.month === m && p.commissionable), po = PAYOUTS.find(o => o.month === m);
     const [y, mo] = m.split("-").map(Number), pay = new Date(y, mo, 10);
-    return { m, n: ps.filter(p => p.amount > 0).length, col: ps.reduce((s, p) => s + p.amount - p.refunded, 0), com: ps.reduce((s, p) => s + Number(p.commission), 0), pay, po };
+    const all = PAYS.filter(p => p.month === m);
+    return { m, n: ps.filter(p => p.amount > 0).length, col: ps.reduce((s, p) => s + p.amount - p.refunded, 0), com: ps.reduce((s, p) => s + Number(p.commission), 0), pay, po,
+             alln: all.filter(p => p.amount > 0).length, allc: all.reduce((s, p) => s + p.amount - p.refunded, 0) };
   });
   $("#vPay").innerHTML = `
     <h2>עמלות ושכר</h2>
     <p class="mute">20% מכל תשלום שאומת ב-Stripe על תיק שעודכן לפני התשלום או עד 48 שעות אחריו. חודש נסגר לפי תאריך התשלום, ומשולם ב-10 לחודש שאחריו. תשלום שהוחזר או הוכחש מקוזז.</p>
-    <div class="tbl"><table><tr><th>חודש</th><th>תשלומים</th><th>נגבה נטו</th><th>עמלה</th><th>מועד תשלום</th><th>סטטוס</th><th></th></tr>
-    ${rows.map(r => `<tr><td>${r.m}</td><td>${r.n}</td><td>${ils(r.col)}</td><td><b>${ils(r.com)}</b></td><td>${dmy(r.pay)}</td>
+    <div class="tbl"><table><tr><th>חודש</th><th>כל הכסף שנכנס</th><th>תשלומים עם עמלה</th><th>נגבה נטו (עם עמלה)</th><th>עמלה</th><th>מועד תשלום</th><th>סטטוס</th><th></th></tr>
+    ${rows.map(r => `<tr><td>${r.m}</td><td>${ils(r.allc)} <span class="mute">· ${r.alln}</span></td><td>${r.n}</td><td>${ils(r.col)}</td><td><b>${ils(r.com)}</b></td><td>${dmy(r.pay)}</td>
       <td>${r.po ? `<span class="chip ok">שולם ${dmy(new Date(r.po.paid_at))}${r.po.ref ? " · " + esc(r.po.ref) : ""}</span>` : r.m === cur ? `<span class="chip">חודש פתוח</span>` : `<span class="chip warn">ממתין לתשלום</span>`}</td>
       <td><button class="btn" data-csv="${r.m}">פירוט CSV</button>${boss() && !r.po && r.m !== cur ? ` <button class="btn g" data-pay="${r.m}">סמן כשולם</button>` : ""}</td></tr>`).join("")}
     </table></div>
     <h3>תשלומים אחרונים</h3>
     <div class="tbl"><table><tr><th>תאריך</th><th>לקוח</th><th>סכום</th><th>הוחזר</th><th>עמלה</th><th>חודש</th></tr>
-    ${PAYS.filter(p => p.commissionable).slice(0, 50).map(p => { const c = CASES.find(x => x.phone === p.phone) || {}; return `<tr><td>${dmy(new Date(p.paid_at))}</td><td>${esc(c.name || p.phone)}</td>
-      <td>${ils(p.amount)}</td><td>${p.refunded ? ils(p.refunded) : ""}</td><td>${p.commissionable ? ils(p.commission) : "ללא"}</td><td>${p.month}</td></tr>`; }).join("")}</table></div>`;
+    ${PAYS.slice(0, 80).map(p => { const c = ALLCASES.find(x => x.phone === p.phone) || {}; return `<tr><td>${dmy(new Date(p.paid_at))}</td><td>${esc(c.name || local(p.phone))}</td>
+      <td>${ils(p.amount)}</td><td>${p.refunded ? ils(p.refunded) : ""}</td><td>${p.commissionable ? ils(p.commission) : `<span class="mute">ללא עמלה</span>`}</td><td>${p.month}</td></tr>`; }).join("")}</table></div>`;
   document.querySelectorAll("[data-csv]").forEach(b => b.onclick = () => csv(b.dataset.csv));
   document.querySelectorAll("[data-pay]").forEach(b => b.onclick = async () => {
     const ref = prompt("אסמכתא / מספר העברה (לא חובה)") ?? "";
@@ -2257,7 +2262,7 @@ function payroll(){
 function csv(m){
   const ps = PAYS.filter(p => p.month === m && p.commissionable);
   const lines = [["תאריך","לקוח","טלפון","סכום","הוחזר","נטו","עמלה","מזהה Stripe"]].concat(ps.map(p => {
-    const c = CASES.find(x => x.phone === p.phone) || {};
+    const c = ALLCASES.find(x => x.phone === p.phone) || {};
     return [dmy(new Date(p.paid_at)), c.name || "", local(p.phone), p.amount, p.refunded, p.amount - p.refunded, p.commission, p.id];
   }));
   lines.push(["סה\"כ","","","","", ps.reduce((s, p) => s + p.amount - p.refunded, 0), ps.reduce((s, p) => s + Number(p.commission), 0), ""]);
