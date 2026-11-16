@@ -1159,7 +1159,16 @@ const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/What
 let ME = null, ADMIN = false, EARNS = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "sum", SEL = null, WAEV = [];
 let SW = { email: true, sms: true };                            // MAIN SWITCH (cms_switches): false = that channel is off for every send
 const OFF = () => ({ email: !SW.email, sms: !SW.sms });
-let MSGS = [], ALLCASES = [], TF = { p: "7", st: "", q: "", col: "" };   // CMS: messages log, all cases, tracking filters
+let MSGS = [], ALLCASES = [], TF = { p: "w", st: "", q: "", col: "" };
+// calendar periods everywhere (not "last 7 / 30 days"): today, this week from Sunday, this month from the 1st
+function calFrom(k){
+  if (!k) return 0;
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })); d.setHours(0, 0, 0, 0);
+  if (k === "w") d.setDate(d.getDate() - d.getDay());
+  if (k === "m") d.setDate(1);
+  return d;
+}
+const CAL = [["1", "היום"], ["w", "השבוע"], ["m", "החודש"], ["", "הכל"]];   // CMS: messages log, all cases, tracking filters
 let PTAB = "msgs", LIST = [];                                   // design only: open tab inside the case panel, order of the list on screen
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -1337,7 +1346,7 @@ function kpis(){
   ].map(([t, v]) => `<div class="kpi"><b>${v}</b><span>${t}</span></div>`).join("");
 }
 // 💬 WhatsApp counters, built like the 📧 / 📱 ones: the main tile is what needs a hand now, every tile is clickable
-let WF = { p: "7", st: "", q: "" };                                // WhatsApp history table filters
+let WF = { p: "w", st: "", q: "" };                                // WhatsApp history table filters
 function waKpis(mine){
   const left = CASES.filter(next), done = CASES.filter(c => !next(c) && doneToday(c)).length, pct = left.length + done ? Math.round(done * 100 / (left.length + done)) : 100;
   const nw = CASES.filter(c => c.status === "חדש"), nwToday = nw.filter(c => c.latest && jday(c.latest) === jday(Date.now())).length;
@@ -1360,7 +1369,7 @@ function waKpis(mine){
 }
 // 💬 history table, like "emails sent": every WhatsApp step an agent marked (from coll_events), newest first
 function waLog(){
-  const days_ = { "1": 1, "7": 7, "30": 30 }[WF.p], from = days_ ? Date.now() - days_ * 864e5 : 0;
+  const from = calFrom(WF.p);
   const nm = p => ALLCASES.find(c => c.phone === p) || { phone: p };
   const rows = WAEV.filter(e => new Date(e.at) >= from).filter(e => !WF.st || e.status === WF.st)
     .filter(e => !WF.q || hit(nm(e.phone), WF.q.toLowerCase())).sort((a, b) => b.at.localeCompare(a.at));
@@ -1369,7 +1378,7 @@ function waLog(){
   $("#waLog").innerHTML = `
     <div class="th"><h3>פעולות וואטסאפ</h3>
       <input id="wq" placeholder="🔍 שם / טלפון / 4 ספרות" value="${esc(WF.q)}">
-      ${sel("wp", WF.p, [["1", "היום"], ["7", "7 ימים"], ["30", "30 יום"], ["", "הכל"]])}
+      ${sel("wp", WF.p, CAL)}
       ${sel("wst", WF.st, [["", "כל הסטטוסים"], ...sts.map(x => [x, x])])}
       <span class="mute">${rows.length} פעולות</span></div>
     <div class="tbl"><table><tr><th>מתי</th><th>לקוח</th><th>סטטוס</th><th>הערה</th><th>על ידי</th></tr>
@@ -1935,7 +1944,7 @@ function tracking(){
         : t.talking ? `<div class="tn wn">בתהליך מול הלקוח · השלב הבא לא נשלח לבד</div>` : `<div class="tn mute">כל השלבים נשלחו</div>`}
     </div>`;
   // log: one row per message of this channel
-  const days = { "1": 1, "7": 7, "30": 30 }[TF.p], from = days ? Date.now() - days * 864e5 : 0;
+  const from = calFrom(TF.p);
   const name = p => (ALLCASES.find(c => c.phone === p) || {}).name || local(p);
   const rows = M.filter(m => new Date(m.at) >= from)
     .filter(m => !TF.st || (TF.st === "failed" ? BAD.has(m) : TF.st === "sent" ? m.status === "sent" || m.status === "queued" : m.status === TF.st))
@@ -1966,7 +1975,7 @@ function tracking(){
     <div class="card tbox" id="tlog">
       <div class="th"><h3>${isE ? "מיילים שנשלחו" : "SMS שנשלחו"}</h3>
         <input id="tq" placeholder="🔍 שם / טלפון / 4 ספרות" value="${esc(TF.q)}">
-        ${sel("tp", TF.p, [["1", "היום"], ["7", "7 ימים"], ["30", "30 יום"], ["", "הכל"]])}
+        ${sel("tp", TF.p, CAL)}
         ${sel("tst", TF.st, isE ? [["", "כל הסטטוסים"], ["delivered", "נמסר"], ["sent", "נשלח, ממתין"], ["failed", "נכשל / חזר"], ["bounced", "מייל חזר"]] : [["", "כל הסטטוסים"], ["delivered", "נמסר"], ["sent", "ממתין לאישור"], ["failed", "לא נמסר"]])}
         <span class="mute">${rows.length} ${isE ? "מיילים" : "הודעות"}</span></div>
       <div class="tbl"><table><tr><th>מתי</th><th>לקוח</th><th>שלב</th><th>מצב</th><th>${isE ? "כתובת" : "נשלח אל"}</th><th>סיבה</th><th>מועד אחרון ללקוח</th></tr>
@@ -2177,7 +2186,7 @@ new MutationObserver(() => document.querySelectorAll(".steps .btn.p").forEach(b 
 
 // ---------- 👥 customers: customer details only, grouped by the day they came in ----------
 // "Came in" = created_at when the server has it, otherwise the dispute date (latest). No flow statuses here.
-let CF = { q: "", r: ["7", "30", "90", ""].includes(ls("custR")) ? ls("custR") : "30", open: null, hf: "", pf: ["", "paid", "open"].includes(ls("custPF")) ? ls("custPF") : "" };
+let CF = { q: "", r: ({ "7": "w", "30": "m", "90": "" })[ls("custR")] ?? (["1", "w", "m", "c", ""].includes(ls("custR")) ? ls("custR") : "m"), f: ls("custF") || "", t: ls("custT") || "", open: null, hf: "", pf: ["", "paid", "open"].includes(ls("custPF")) ? ls("custPF") : "" };
 // paid = verified in Stripe (the same rule that takes a case off the desk). Payments are in shekels, case amounts in agorot.
 const paidC = c => isPaid(c) || String(c.status).startsWith("שולם");
 function payInfo(c){
@@ -2211,11 +2220,13 @@ function dayTitle(k){
   return k === t ? `היום <span class="mute">· ${full}</span>` : k === y ? `אתמול <span class="mute">· ${full}</span>` : full;
 }
 function customers(){
-  const from = CF.r ? Date.now() - Number(CF.r) * 864e5 : 0;
+  let from = calFrom(CF.r === "c" ? "" : CF.r), to = Infinity;
+  if (CF.r === "c" && CF.f && CF.t) { const [f, t] = [CF.f, CF.t].sort(), d = v => { const [y, m, x] = v.split("-").map(Number); return new Date(y, m - 1, x); };
+    from = d(f); to = +d(t) + 864e5; }
   const PD = CF.pf === "paid";
   // in "paid" the page is ordered and grouped by the day the money came in; otherwise by the day the customer came in
   const when = c => PD ? payInfo(c).last || cameIn(c) : cameIn(c);
-  const inRange = ALLCASES.filter(c => when(c) && new Date(when(c)) >= from).filter(c => !CF.q || hit(c, CF.q.toLowerCase()));
+  const inRange = ALLCASES.filter(c => when(c) && new Date(when(c)) >= from && new Date(when(c)) < to).filter(c => !CF.q || hit(c, CF.q.toLowerCase()));
   const nPaid = inRange.filter(paidC).length, nOpen = inRange.length - nPaid;
   const list = inRange.filter(c => !CF.pf || (PD ? paidC(c) : !paidC(c))).sort((a, b) => when(b).localeCompare(when(a)));
   const days = {}; list.forEach(c => (days[jday(when(c))] = days[jday(when(c))] || []).push(c));
@@ -2253,14 +2264,23 @@ function customers(){
       <div class="pfs" id="cpf">${[["", "👥 כולם", inRange.length, ""], ["paid", "✓ שילמו", nPaid, "pd"], ["open", "⏳ לא שילמו", nOpen, "op"]].map(([k, t, n, cl]) =>
         `<button data-pf="${k}" class="${cl} ${k === CF.pf ? "on" : ""}">${t}<small>${n}</small></button>`).join("")}</div>
       <input id="cq" class="cq" placeholder="🔍 שם / טלפון / 4 ספרות / הזמנה / מייל" value="${esc(CF.q)}">
-      <div class="seg" id="cr">${[["7", "שבוע"], ["30", "חודש"], ["90", "3 חודשים"], ["", "הכל"]].map(([k, t]) => `<button data-cr="${k}" class="${k === CF.r ? "on" : ""}">${t}</button>`).join("")}</div></div>
+      <div class="seg" id="cr">${[["1", "היום"], ["w", "השבוע"], ["m", "החודש"], ["c", "📅 טווח תאריכים"], ["", "הכל"]].map(([k, t]) => `<button data-cr="${k}" class="${k === CF.r ? "on" : ""}">${t}</button>`).join("")}</div>
+      ${CF.r === "c" ? `<div class="drng"><label>מ-<input type="date" id="cf" value="${CF.f}"></label><label>עד<input type="date" id="ct" value="${CF.t}"></label></div>` : ""}</div>
     <div class="card cl">
       <div class="cu cuh"><div class="cu1"><span class="ct">${PD ? "שולם" : "שעה"}</span><span class="cn">לקוח</span><span class="cph">טלפון</span><span class="cem">מייל</span><span class="cor">הזמנה</span><span class="cam">סכום</span></div></div>
       ${keys.map(k => `<div class="dg"><div class="dh"><b>${dayTitle(k)}</b><span class="sp"></span><span class="dc">${days[k].length} ${PD ? "שילמו" : "לקוחות"}</span><span class="ds">${ils(dsum(days[k]))}</span></div>
         ${days[k].map(row).join("")}</div>`).join("") || `<div class="empty">${PD ? "אין תשלומים בטווח הזה." : CF.pf === "open" ? "כל הלקוחות בטווח הזה שילמו." : "אין לקוחות בטווח הזה."}</div>`}
     </div>`;
   $("#cq").oninput = e => { CF.q = e.target.value; customers(); const i = $("#cq"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
-  document.querySelectorAll("[data-cr]").forEach(b => b.onclick = () => { CF.r = b.dataset.cr; ls("custR", CF.r); customers(); });
+  document.querySelectorAll("[data-cr]").forEach(b => b.onclick = () => {
+    CF.r = b.dataset.cr; ls("custR", CF.r);
+    if (CF.r === "c" && !(CF.f && CF.t)) { const t = calFrom("1"), f = new Date(t); f.setDate(f.getDate() - 6);
+      const y = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      CF.f = y(f); CF.t = y(t); ls("custF", CF.f); ls("custT", CF.t); }
+    customers();
+  });
+  if ($("#cf")) { const go = () => { if (!$("#cf").value || !$("#ct").value) return; CF.f = $("#cf").value; CF.t = $("#ct").value; ls("custF", CF.f); ls("custT", CF.t); customers(); };
+    $("#cf").onchange = go; $("#ct").onchange = go; }
   document.querySelectorAll("[data-pf]").forEach(b => b.onclick = () => { CF.pf = b.dataset.pf; ls("custPF", CF.pf); customers(); });
   document.querySelectorAll("#vCust [data-copy]").forEach(b => b.onclick = e => { e.stopPropagation(); navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
   document.querySelectorAll("#vCust [data-hf]").forEach(b => b.onclick = e => { e.stopPropagation(); CF.hf = b.dataset.hf; customers(); });
