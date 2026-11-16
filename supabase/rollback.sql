@@ -1,4 +1,7 @@
 -- CMS: remove everything the CMS added. coll_* tables and the WhatsApp flow are not touched.
+-- commission backfill (20261116000008): put the agent mark back where it was, then drop the backup
+update public.coll_cases c set agent_touched_at = b.old_agent_touched_at from public.cms_backfill_commission b where b.phone = c.phone and c.agent_touched_at = b.new_agent_touched_at;
+drop table if exists public.cms_backfill_commission;
 -- live updates (20261116000007): stop announcing changes (settings only)
 do $$ declare t text; begin foreach t in array array['coll_cases','coll_payments','coll_payouts','coll_events','cms_messages','cms_events','cms_cases','cms_switches'] loop
   if exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename=t) then execute format('alter publication supabase_realtime drop table public.%I', t); end if; end loop; end $$;
