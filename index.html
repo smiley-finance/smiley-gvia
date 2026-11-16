@@ -223,7 +223,8 @@
 //
 // ctx = { log: [messages of this case], now: Date, ignoreQuiet: bool (test only),
 //         only: "email"|"sms" = BACKUP SEND: resend just that channel of a stage that already went out, because it failed,
-//         emailOnly: bool = the agent chose "email only" for this send: no SMS goes out (the stage itself moves as usual) }
+//         emailOnly: bool = the agent chose "email only" for this send: no SMS goes out (the stage itself moves as usual),
+//         off: { email: bool, sms: bool } = MAIN SWITCH: that channel is turned off for every send (dashboard, table cms_switches) }
 // log rows look like the planned table cms_messages:
 //   { id, phone, stage, channel: "email"|"sms", to, subject, body, due, status: "queued"|"sent"|"delivered"|"failed"|"bounced", error, at }
 (function (root) {
@@ -335,7 +336,8 @@
     if (q) (ctx.ignoreQuiet ? warnings : errors).push(q + (ctx.ignoreQuiet ? " (מצב בדיקה: מתעלמים)" : ""));
     // 4. the channels
     let email = validEmail(c.email), sms = validPhone(c.phone);
-    const hasEmail = email;                                         // the texts still say "we also emailed you" on an SMS-only resend
+    const off = ctx.off || {};
+    let hasEmail = email && !(off.email && !only);                 // the texts still say "we also emailed you" on an SMS-only resend (not when email is switched off)
     if (only === "email") { if (!email) errors.push("אין כתובת מייל תקינה ללקוח"); sms = false; }
     if (only === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין"); email = false; }
     const emailOnly = !only && !!ctx.emailOnly;                    // agent's choice in the send window: email only, no SMS
@@ -343,12 +345,16 @@
     if (!only && !emailOnly && !email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
     if (!only && !emailOnly && !sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
     if (!only && !emailOnly && !email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
+    // main switch: a channel that is off is skipped, whatever was chosen above
+    if (off.email && email) { email = false; warnings.push("📧 המייל כבוי במתג הראשי: לא יישלח מייל"); }
+    if (off.sms && sms) { sms = false; warnings.push("💬 ה-SMS כבוי במתג הראשי: לא יישלח SMS"); }
+    if ((off.email || off.sms) && !email && !sms && !errors.length) errors.push("אין ערוץ פתוח לשליחה: הערוץ כבוי במתג הראשי");
     if (log.some(m => m.channel === "email" && (m.status === "failed" || m.status === "bounced"))) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
 
     const prev = only && log.find(m => m.stage === stage && m.due);
     const due = prev ? prev.due : dueFor(c, stage, log, now);         // a resend keeps the deadline the customer already got
     const msg = T.render(c, stage, { due, hasEmail, now });
-    if (msg.smsInfo.parts > 2) warnings.push(`ה-SMS ארוך: ${msg.smsInfo.parts} חלקים`);
+    if (sms && msg.smsInfo.parts > 2) warnings.push(`ה-SMS ארוך: ${msg.smsInfo.parts} חלקים`);
     return { ok: errors.length === 0, errors, warnings, stage, due, channels: { email, sms },
              to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only, emailOnly };
   }
@@ -665,6 +671,11 @@ button.kpi{font:inherit;text-align:inherit;cursor:pointer;color:inherit}button.k
 .kpi small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
 .kpi.bad{background:var(--badbg);border-color:#fca5a5}.kpi.bad b{color:var(--bad)}
 .tbox{margin-bottom:16px;overflow:hidden}
+.swbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 14px;margin-bottom:14px}
+.btn.sw.on{background:#e8f7ee;border-color:#9bd3b0;color:#17663a}
+.btn.sw.off{background:#fdecec;border-color:#efa3a3;color:#a12020}
+:root[data-theme="dark"] .btn.sw.on{background:#173a26;color:#9fe0b8;border-color:#2c6b46}
+:root[data-theme="dark"] .btn.sw.off{background:#3d1a1a;color:#f2a9a9;border-color:#7a3030}
 .th{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
 .th h3{margin:0;font-size:16px}.th input,.th select{padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:#fff}
 .th input{flex:1;min-width:180px}
@@ -1053,6 +1064,8 @@ const STATUSES = ["חדש","נשלחה הודעה","בתהליך",HOLD,"בוצע
 const DONE = "בוצע – ממתין לאימות";
 const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
 let ME = null, ADMIN = false, EARNS = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "sum", SEL = null, WAEV = [];
+let SW = { email: true, sms: true };                            // MAIN SWITCH (cms_switches): false = that channel is off for every send
+const OFF = () => ({ email: !SW.email, sms: !SW.sms });
 let MSGS = [], ALLCASES = [], TF = { p: "7", ch: "", st: "", q: "", col: "" };   // CMS: messages log, all cases, tracking filters
 let PTAB = "msgs", LIST = [];                                   // design only: open tab inside the case panel, order of the list on screen
 const $ = s => document.querySelector(s);
@@ -1125,14 +1138,16 @@ $("#theme").onclick = () => setTheme(document.documentElement.dataset.theme === 
 setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
 
 async function load(){
-  const [c, p, o, ms, ce, we, ec] = await Promise.all([
+  const [c, p, o, ms, ce, we, ec, sw] = await Promise.all([
     SB.from("coll_cases").select("*").eq("removed", false).order("latest", {ascending: false}),
     SB.from("coll_payments").select("*").order("paid_at", {ascending: false}),
     SB.from("coll_payouts").select("*"),
     SB.from("cms_messages").select("*").order("at", {ascending: false}),
     SB.from("cms_events").select("*"),
     SB.from("coll_events").select("*"),
-    SB.from("cms_cases").select("*")]);
+    SB.from("cms_cases").select("*"),
+    SB.from("cms_switches").select("*")]);
+  if (!sw.error) (sw.data || []).forEach(r => { SW[r.channel] = r.is_on !== false; SW[r.channel + "_by"] = r.by_email; SW[r.channel + "_at"] = r.updated_at; });
   MSGS = ms.data || []; CEV = ce.data || []; WAEV = we.data || [];
   // the email/SMS flow keeps its own status in cms_cases (coll_cases is not changed): put it on each case
   const EC = Object.fromEntries((ec.data || []).map(r => [r.phone, r]));
@@ -1532,8 +1547,8 @@ function closeEmail(){ EP = null; $("#ep").classList.add("hide"); }
 async function openSend(phone, stage, only, emailOnly){   // only = "email" | "sms": backup send of that channel alone · emailOnly = "email only" box ticked
   const c = ALLCASES.find(x => x.phone === phone); if (!c) return;
   const { data: log } = await SB.from("cms_messages").select("*").eq("phone", phone);
-  const pl = CMS_SEND.plan(c, stage, { log: log || [], ignoreQuiet: TESTQ(), only, emailOnly: !only && !!emailOnly }), m = pl.msg;
-  const eo = !!pl.emailOnly, goTxt = only ? `🔁 שלח שוב: ${only === "email" ? "📧 מייל" : "💬 SMS"}` : eo ? "📧 שלח מייל עכשיו" : "📧💬 שלח עכשיו";
+  const pl = CMS_SEND.plan(c, stage, { log: log || [], ignoreQuiet: TESTQ(), only, emailOnly: !only && !!emailOnly, off: OFF() }), m = pl.msg;
+  const eo = !!pl.emailOnly, goTxt = only ? `🔁 שלח שוב: ${only === "email" ? "📧 מייל" : "💬 SMS"}` : pl.channels.email && !pl.channels.sms ? "📧 שלח מייל עכשיו" : pl.channels.sms && !pl.channels.email ? "💬 שלח SMS עכשיו" : "📧💬 שלח עכשיו";
   const onlyName = only === "email" ? "📧 מייל" : only === "sms" ? "💬 SMS" : "";
   const li = (cls, t) => `<li class="${cls}">${cls === "er" ? "⛔" : cls === "wn" ? "⚠️" : "✓"} ${esc(t)}</li>`;
   $("#sbox").innerHTML = `
@@ -1543,7 +1558,7 @@ async function openSend(phone, stage, only, emailOnly){   // only = "email" | "s
         <h4>נשלח אל</h4>
         <div>${pl.to.email ? "📧 " + esc(pl.to.email) : `<span class="${only ? "mute" : "wn"}">📧 לא יישלח מייל</span>`}</div>
         <div>${pl.to.sms ? "💬 " + esc(local(pl.to.sms)) : `<span class="${only || eo ? "mute" : "wn"}">💬 לא יישלח SMS${eo ? " (נבחר מייל בלבד)" : ""}</span>`}</div>
-        ${only ? "" : `<label class="eo" style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer;font-weight:600"><input type="checkbox" id="seo" ${eo ? "checked" : ""} style="width:18px;height:18px;accent-color:var(--p,#7b56de)"> 📧 לשלוח מייל בלבד (בלי SMS)</label>`}
+        ${only || !SW.sms ? "" : `<label class="eo" style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer;font-weight:600"><input type="checkbox" id="seo" ${eo ? "checked" : ""} style="width:18px;height:18px;accent-color:var(--p,#7b56de)"> 📧 לשלוח מייל בלבד (בלי SMS)</label>`}
         <h4>בדיקות</h4>
         <ul class="chk">${pl.errors.map(e => li("er", e)).join("")}${pl.warnings.map(w => li("wn", w)).join("")}${pl.ok && !pl.warnings.length ? li("okk", "הכל תקין") : ""}</ul>
         <h4>אחרי השליחה</h4>
@@ -1560,7 +1575,7 @@ async function openSend(phone, stage, only, emailOnly){   // only = "email" | "s
     <div class="sf">
       <button class="btn send big" id="sgo" ${pl.ok ? "" : "disabled style='opacity:.45;cursor:not-allowed'"}>${goTxt}</button>
       <button class="btn" id="sx2">ביטול</button>
-      <span class="mute" style="font-size:13px">${!pl.ok ? "אי אפשר לשלוח: ראו את הבדיקות מימין." : only ? `הלחיצה שולחת ללקוח ${onlyName} אמיתי, רק את הערוץ הזה.` : eo ? "הלחיצה שולחת ללקוח מייל אמיתי בלבד. SMS לא יישלח." : "הלחיצה שולחת ללקוח מייל ו-SMS אמיתיים."}</span>
+      <span class="mute" style="font-size:13px">${!pl.ok ? "אי אפשר לשלוח: ראו את הבדיקות מימין." : only ? `הלחיצה שולחת ללקוח ${onlyName} אמיתי, רק את הערוץ הזה.` : pl.channels.email && !pl.channels.sms ? "הלחיצה שולחת ללקוח מייל אמיתי בלבד. SMS לא יישלח." : pl.channels.sms && !pl.channels.email ? "הלחיצה שולחת ללקוח SMS אמיתי בלבד. מייל לא יישלח." : "הלחיצה שולחת ללקוח מייל ו-SMS אמיתיים."}</span>
     </div>`;
   if ($("#sif")) $("#sif").srcdoc = m.html;
   $("#sm").classList.remove("hide");
@@ -1682,7 +1697,11 @@ function tracking(){
     .filter(g => !TF.q || hit(ALLCASES.find(c => c.phone === g.phone) || { phone: g.phone }, TF.q.toLowerCase()))
     .sort((a, b) => b.at.localeCompare(a.at));
   const sel = (id, v, opts) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${k === v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+  const swb = ch => { const on = SW[ch], nm = ch === "email" ? "📧 מייל" : "💬 SMS";
+    return `<button class="btn sw ${on ? "on" : "off"}" data-sw="${ch}" title="${SW[ch + "_by"] ? "שונה לאחרונה: " + esc(SW[ch + "_by"]) : ""}">${nm}: <b>${on ? "פועל" : "כבוי"}</b> <span class="mute">· ${on ? "לכבות" : "להפעיל"}</span></button>`; };
   $("#vTrack").innerHTML = `
+    <div class="card swbar"><b>מתג ראשי</b>${swb("email")}${swb("sms")}
+      <span class="mute">${!SW.email && !SW.sms ? "⛔ שני הערוצים כבויים: שום הודעה לא יוצאת" : !SW.email ? "המייל כבוי: יוצא רק SMS (גם בשלבים האוטומטיים)" : !SW.sms ? "ה-SMS כבוי: יוצא רק מייל (גם בשלבים האוטומטיים)" : "כבוי = הערוץ לא נשלח בכלל, גם לא בשלבים האוטומטיים"}</span></div>
     <div class="kpis tk">
       <button class="kpi main" data-tf="due"><b>${due.length}</b><span>לשלוח עכשיו (שלב 1)</span><small>⏱ ${autoQ.length} בתור האוטומטי (שלבים 2–4)</small></button>
       <button class="kpi" data-tf="new"><b>${cols[0].length}</b><span>חדשים שעוד לא קיבלו כלום</span><small>${newToday ? `🆕 ${newToday} נכנסו היום` : "&nbsp;"}</small></button>
@@ -1723,6 +1742,17 @@ function tracking(){
     if (k === "today") { Object.assign(TF, { p: "1", st: "", ch: "" }); re(); return $("#tlog").scrollIntoView({ behavior: "smooth" }); }
     if (k === "dlv") { Object.assign(TF, { st: "delivered" }); re(); return $("#tlog").scrollIntoView({ behavior: "smooth" }); }
     document.querySelector(k === "new" ? ".tcol" : ".tc.due")?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  });
+  document.querySelectorAll("[data-sw]").forEach(b => b.onclick = async () => {
+    const ch = b.dataset.sw, to = !SW[ch];
+    if (b.dataset.arm !== "1") {                               // two clicks: the first one only asks
+      b.dataset.arm = "1"; b.innerHTML = `${ch === "email" ? "📧 מייל" : "💬 SMS"}: <b>ללחוץ שוב ${to ? "להפעלה" : "לכיבוי"}</b>`;
+      return setTimeout(() => { if (b.isConnected && b.dataset.arm === "1") tracking(); }, 4000);
+    }
+    b.disabled = true;
+    const { error } = await SB.rpc("cms_set_switch", { p_channel: ch, p_on: to });
+    if (error) { toast("לא נשמר: " + error.message); return tracking(); }
+    SW[ch] = to; toast(`${ch === "email" ? "📧 מייל" : "💬 SMS"} ${to ? "הופעל" : "כובה"} לכל השליחות`); tracking();
   });
   document.querySelectorAll("[data-tsend]").forEach(b => b.onclick = e => { e.stopPropagation(); const [p, s] = b.dataset.tsend.split("|"); openSend(p, Number(s)); });
   document.querySelectorAll("[data-resend]").forEach(b => { if (!b.closest("#epb")) b.onclick = e => { e.stopPropagation(); const [p, s, ch] = b.dataset.resend.split("|"); openSend(p, Number(s), ch); }; });
