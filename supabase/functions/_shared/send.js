@@ -10,7 +10,7 @@
 //
 // ctx = { log: [messages of this case], now: Date, ignoreQuiet: bool (test only),
 //         only: "email"|"sms" = BACKUP SEND: resend just that channel of a stage that already went out, because it failed,
-//         emailOnly: bool = the agent chose "email only" for this send: no SMS goes out (the stage itself moves as usual),
+//         alone: "email"|"sms" = the agent chose ONE channel for this send (the stage itself moves as usual; emailOnly: true = alone "email"),
 //         off: { email: bool, sms: bool } = MAIN SWITCH: that channel is turned off for every send (dashboard, table cms_switches) }
 // log rows look like the planned table cms_messages:
 //   { id, phone, stage, channel: "email"|"sms", to, subject, body, due, status: "queued"|"sent"|"delivered"|"failed"|"bounced", error, at }
@@ -124,14 +124,15 @@
     // 4. the channels
     let email = validEmail(c.email), sms = validPhone(c.phone);
     const off = ctx.off || {};
-    let hasEmail = email && !(off.email && !only);                 // the texts still say "we also emailed you" on an SMS-only resend (not when email is switched off)
+    const alone = only ? null : ctx.alone === "email" || ctx.alone === "sms" ? ctx.alone : ctx.emailOnly ? "email" : null;   // agent's choice in the send window
+    let hasEmail = email && !(off.email && !only) && alone !== "sms";   // the texts still say "we also emailed you" on an SMS-only resend (not when no email goes out now)
     if (only === "email") { if (!email) errors.push("אין כתובת מייל תקינה ללקוח"); sms = false; }
     if (only === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין"); email = false; }
-    const emailOnly = !only && !!ctx.emailOnly;                    // agent's choice in the send window: email only, no SMS
-    if (emailOnly) { if (!email) errors.push("אין כתובת מייל תקינה: אי אפשר לשלוח מייל בלבד"); sms = false; }
-    if (!only && !emailOnly && !email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
-    if (!only && !emailOnly && !sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
-    if (!only && !emailOnly && !email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
+    if (alone === "email") { if (!email) errors.push("אין כתובת מייל תקינה: אי אפשר לשלוח מייל בלבד"); sms = false; }
+    if (alone === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין: אי אפשר לשלוח SMS בלבד"); email = false; }
+    if (!only && !alone && !email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
+    if (!only && !alone && !sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
+    if (!only && !alone && !email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
     // main switch: a channel that is off is skipped, whatever was chosen above
     if (off.email && email) { email = false; warnings.push("📧 המייל כבוי במתג הראשי: לא יישלח מייל"); }
     if (off.sms && sms) { sms = false; warnings.push("💬 ה-SMS כבוי במתג הראשי: לא יישלח SMS"); }
@@ -143,7 +144,7 @@
     const msg = T.render(c, stage, { due, hasEmail, now });
     if (sms && msg.smsInfo.parts > 2) warnings.push(`ה-SMS ארוך: ${msg.smsInfo.parts} חלקים`);
     return { ok: errors.length === 0, errors, warnings, stage, due, channels: { email, sms },
-             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only, emailOnly };
+             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only, alone, emailOnly: alone === "email" };
   }
 
   // where a customer stands in the 4 stages, and when the next one is due (same days as the WhatsApp flow):

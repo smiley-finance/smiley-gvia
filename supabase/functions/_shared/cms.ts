@@ -83,9 +83,9 @@ export async function loadLog(sb: SupabaseClient, phone?: string): Promise<Case[
 
 // ---------- send one stage to one customer: the same steps the mock plays (fake-sb.js cmsSend) ----------
 export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
-  o: { log: Case[]; now: Date; auto: boolean; by: string | null; ignoreQuiet?: boolean; only?: "email" | "sms"; emailOnly?: boolean }) {
+  o: { log: Case[]; now: Date; auto: boolean; by: string | null; ignoreQuiet?: boolean; only?: "email" | "sms"; alone?: "email" | "sms" }) {
   if (!sendingOn) return { ok: false, errors: ["השליחה כבויה בשרת (CMS_SENDING לא מופעל). שום הודעה לא יוצאת."], warnings: [], stage, sent: [], failed: [] };
-  const plan = R.plan(c, stage, { log: o.log, now: o.now, ignoreQuiet: !!o.ignoreQuiet && testMode, only: o.only, emailOnly: !!o.emailOnly, off: await switchesOff(sb) });
+  const plan = R.plan(c, stage, { log: o.log, now: o.now, ignoreQuiet: !!o.ignoreQuiet && testMode, only: o.only, alone: o.alone, off: await switchesOff(sb) });
   const useSms = plan.channels.sms && smsReady();
   if (plan.channels.email && !emailReady()) plan.errors.push("המייל עוד לא מחובר (חסרים GMAIL_USER / GMAIL_APP_PASSWORD)");
   if (plan.channels.sms && !smsReady()) plan.warnings.push("ה-SMS עוד לא מחובר: יישלח מייל בלבד");
@@ -145,7 +145,7 @@ export async function sendStage(sb: SupabaseClient, c: Case, stage: number,
     const { data: cur } = await sb.from("cms_cases").select("email_touched_at").eq("phone", c.phone).maybeSingle();
     await sb.from("cms_cases").upsert({ phone: c.phone, email_status: plan.statusAfter, email_touched_at: cur?.email_touched_at || now, email_last_at: now, updated_at: now });
     await sb.from("cms_events").insert({ phone: c.phone, status: plan.statusAfter, by_email: o.by,
-      note: `${o.auto ? "⏱ נשלח אוטומטית · " : ""}${sent.length === 1 ? (sent[0] === "email" ? "📧" : "💬") : "📧💬"} שלב ${stage} נשלח (${how}${plan.emailOnly ? " · מייל בלבד לפי בחירה, בלי SMS" : ""}${plan.warnings.some((w: string) => w.includes("מתג הראשי")) ? " · ערוץ כבוי במתג הראשי" : ""}) · מועד אחרון ${plan.due}${failed.length ? " · ⚠ נכשל: " + failed.join(", ") : ""}` });
+      note: `${o.auto ? "⏱ נשלח אוטומטית · " : ""}${sent.length === 1 ? (sent[0] === "email" ? "📧" : "💬") : "📧💬"} שלב ${stage} נשלח (${how}${plan.alone ? ` · ${plan.alone === "email" ? "מייל" : "SMS"} בלבד לפי בחירה` : ""}${plan.warnings.some((w: string) => w.includes("מתג הראשי")) ? " · ערוץ כבוי במתג הראשי" : ""}) · מועד אחרון ${plan.due}${failed.length ? " · ⚠ נכשל: " + failed.join(", ") : ""}` });
   } else {
     await sb.from("cms_events").insert({ phone: c.phone, status: c.email_status, by_email: o.by, note: `⚠ שלב ${stage}: השליחה נכשלה (${failed.join(", ")})` });
   }
