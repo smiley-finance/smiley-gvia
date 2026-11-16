@@ -2,6 +2,8 @@
 // 1. Agent clicks "שלח" in the dashboard:  SB.functions.invoke("cms-send", { body: { phone, stage } })  (logged-in agent)
 //    Backup send of one failed channel:     { phone, stage, only: "email" | "sms" }
 //    One channel only (agent's choice):     { phone, stage, alone: "email" | "sms" }   (old: email_only: true)
+//    SEPARATE FLOWS (16.11.2026):            { phone, stage, flow: "email" | "sms" }  -> that flow's stage, status and channel only
+//    (no flow = the old shared behaviour, so a dashboard page still open from before keeps working)
 // 2. The scheduler (pg_cron, every 15 min):  POST {"auto": true} with header x-cms-cron = CRON_SECRET
 //    -> sends every stage 2-4 that is due now, inside the window (Sun-Thu 08:00-20:00 Israel time, no holidays).
 // Every send runs the same rules as the dashboard (send.js plan()), so the server can't be talked into skipping one.
@@ -27,9 +29,10 @@ Deno.serve(async (req) => {
     if (!isTestRecipient(c.email) || !isTestRecipient(c.phone)) return json(req, { ok: false, error: "not a test customer" }, 403);
     const log = await loadLog(sb, c.phone);
     // deno-lint-ignore no-explicit-any
-    const pick = body.stage ? { stage: Number(body.stage), auto: false } : (R.autoPick([c], log, now, { ignoreQuiet: true })[0] as any);
-    if (!pick) return json(req, { ok: true, note: "timer: nothing due for this customer", track: R.track(c, log, now) });
-    const r = await sendStage(sb, c, pick.stage, { log, now, auto: !body.stage, by: "test", ignoreQuiet: true });
+    const tflow = body.flow === "email" || body.flow === "sms" ? body.flow : undefined;
+    const pick = body.stage ? { stage: Number(body.stage), auto: false } : (R.autoPick([c], log, now, { ignoreQuiet: true, flow: tflow })[0] as any);
+    if (!pick) return json(req, { ok: true, note: "timer: nothing due for this customer", track: R.track(c, log, now, tflow) });
+    const r = await sendStage(sb, c, pick.stage, { log, now, auto: !body.stage, by: "test", ignoreQuiet: true, flow: tflow });
     return json(req, { ...r, timer: !body.stage });
   }
 
@@ -53,11 +56,14 @@ Deno.serve(async (req) => {
     try {
       const [cases, log] = await Promise.all([loadOpenCases(sb), loadLog(sb)]);
       // deno-lint-ignore no-explicit-any
-      const picks = R.autoPick(cases, log, now).slice(0, MAX_PER_RUN) as any[];
+      // separate flows: the email timer and the SMS timer each pick their own due stages (a flow whose switch is off is skipped)
+      // deno-lint-ignore no-explicit-any
+      const picks = ([] as any[]).concat(...(["email", "sms"] as const).filter(f => !off[f]).map(f => R.autoPick(cases, log, now, { flow: f, off })))
+        .slice(0, MAX_PER_RUN);
       const done = [];
       for (const p of picks) {
-        const r = await sendStage(sb, p.c, p.stage, { log: await loadLog(sb, p.c.phone), now: new Date(), auto: true, by: null });
-        done.push({ phone: p.c.phone, stage: p.stage, ok: r.ok, sent: r.sent, failed: r.failed, errors: r.errors });
+        const r = await sendStage(sb, p.c, p.stage, { log: await loadLog(sb, p.c.phone), now: new Date(), auto: true, by: null, flow: p.flow });
+        done.push({ phone: p.c.phone, stage: p.stage, flow: p.flow, ok: r.ok, sent: r.sent, failed: r.failed, errors: r.errors });
       }
       await sb.from("cms_runs").insert({ kind: "auto", sent: done.filter(d => d.ok).length,
         note: `${picks.length} הגיע זמנם${done.some(d => !d.ok) ? ` · ${done.filter(d => !d.ok).length} נכשלו` : ""}${testMode ? " · מצב בדיקה" : ""}` });
@@ -79,9 +85,11 @@ Deno.serve(async (req) => {
   if (body.only !== undefined && !only) return json(req, { ok: false, error: "ערוץ לא תקין" }, 400);
   // "send only email / only SMS" in the send window: this stage goes out on that one channel
   const alone = only ? undefined : body.alone === "email" || body.alone === "sms" ? body.alone : body.email_only === true ? "email" : undefined;
+  const flow = body.flow === "email" || body.flow === "sms" ? body.flow : undefined;
+  if (body.flow !== undefined && !flow) return json(req, { ok: false, error: "זרימה לא תקינה" }, 400);
   const c = await loadCase(sb, phone);
   if (!c) return json(req, { ok: false, error: "התיק לא נמצא" }, 404);
   // ignore_quiet works ONLY in test mode (CMS_TEST_TO set). Live, the window can't be skipped from the page.
-  const r = await sendStage(sb, c, stage, { log: await loadLog(sb, phone), now, auto: false, by, ignoreQuiet: !!body.ignore_quiet, only, alone });
+  const r = await sendStage(sb, c, stage, { log: await loadLog(sb, phone), now, auto: false, by, ignoreQuiet: !!body.ignore_quiet, only, alone: flow ? undefined : alone, flow });
   return json(req, { ...r, error: r.ok ? null : r.errors.join(" · ") });
 });

@@ -22,7 +22,8 @@
       order: (k, opt) => (o.push([k, opt && opt.ascending === false ? -1 : 1]), q),
       then: (ok, bad) => {
         const src = table === "cms_cases"     // real server: its own table. Here: read from the mock cases
-          ? DB.cases.map(c => ({ phone: c.phone, email_status: c.email_status || "חדש", email_touched_at: c.email_touched_at || null, email_last_at: c.email_last_at || null }))
+          ? DB.cases.map(c => ({ phone: c.phone, email_status: c.email_status || "חדש", email_touched_at: c.email_touched_at || null, email_last_at: c.email_last_at || null,
+              sms_status: c.sms_status || null, sms_touched_at: c.sms_touched_at || null, sms_last_at: c.sms_last_at || null }))
           : DB[TABLES[table]] || [];
         let rows = clone(src).filter(r => f.every(fn => fn(r)));
         o.forEach(([k, d]) => rows.sort((a, b) => String(a[k] ?? "").localeCompare(String(b[k] ?? "")) * d));
@@ -45,21 +46,21 @@
   // ---------- the email/SMS flow has its own status (email_status) and its own history (cms_events) ----------
   // Same status names as WhatsApp, so agents know them; the values are kept apart. בבדיקה/המתנה is allowed here.
   const EMAIL_STATUSES = ["חדש", "נשלחה הודעה", "בתהליך", "בבדיקה/המתנה", "בוצע – ממתין לאימות", "נשלח מכתב התראה", "סגור"];
-  function setEmailStatus(phone, st, note) {
+  function setEmailStatus(phone, st, note, flow) {               // flow "sms" = the SMS flow's own status (sms_*), else email
     if (!EMAIL_STATUSES.includes(st)) return { message: "invalid status" };
     const c = DB.cases.find(x => x.phone === phone); if (!c) return { message: "case not found" };
-    const now = new Date().toISOString();
-    Object.assign(c, { email_status: st, email_last_at: now, email_touched_at: c.email_touched_at || (st !== "חדש" ? now : null) });
-    DB.cms_events.push({ phone, status: st, at: now, note: note || null });
+    const now = new Date().toISOString(), P = flow === "sms" ? "sms" : "email";
+    Object.assign(c, { [P + "_status"]: st, [P + "_last_at"]: now, [P + "_touched_at"]: c[P + "_touched_at"] || (st !== "חדש" ? now : null) });
+    DB.cms_events.push({ phone, status: st, at: now, note: note || null, flow: flow || null });
     return null;
   }
 
   // ---------- the future Edge Function, played here ----------
   let NEXT_ID = Math.max(0, ...DB.messages.map(m => m.id)) + 1;
-  function cmsSend({ p_phone, p_stage, p_ignore_quiet, p_auto }) {
+  function cmsSend({ p_phone, p_stage, p_ignore_quiet, p_auto, p_flow, p_only }) {
     const c = DB.cases.find(x => x.phone === p_phone);
     if (!c) return { error: { message: "case not found" } };
-    const plan = root.CMS_SEND.plan(c, p_stage, { log: DB.messages, ignoreQuiet: !!p_ignore_quiet });
+    const plan = root.CMS_SEND.plan(c, p_stage, { log: DB.messages, ignoreQuiet: !!p_ignore_quiet, flow: p_flow, only: p_only });
     if (!plan.ok) return { data: plan, error: { message: plan.errors.join(" · ") } };
     const at = new Date().toISOString(), m = plan.msg, rows = [];
     if (plan.channels.email) rows.push({ id: NEXT_ID++, phone: c.phone, stage: p_stage, channel: "email", to: c.email, subject: m.subject,
@@ -68,7 +69,8 @@
       body: m.sms, parts: m.smsInfo.parts, due: plan.due, status: "sent", error: null, at, auto: !!p_auto });
     DB.messages.push(...rows);
     const how = [plan.channels.email && "מייל", plan.channels.sms && "SMS"].filter(Boolean).join(" + ");
-    setEmailStatus(c.phone, plan.statusAfter, `${p_auto ? "⏱ נשלח אוטומטית · " : ""}📧💬 שלב ${p_stage} נשלח (${how}) · מועד אחרון ${plan.due}`);   // the WhatsApp status is NOT touched
+    if (p_only) DB.cms_events.push({ phone: c.phone, status: plan.flowStatus, at, flow: p_flow || null, note: `🔁 שלב ${p_stage}: נשלח שוב (${how} בלבד)` });
+    else setEmailStatus(c.phone, plan.statusAfter, `${p_auto ? "⏱ נשלח אוטומטית · " : ""}${p_flow === "sms" ? "📱" : p_flow === "email" ? "📧" : "📧💬"} שלב ${p_stage} נשלח (${how}) · מועד אחרון ${plan.due}`, p_flow);   // the WhatsApp status is NOT touched
     save();
     // delivery reports arrive a few seconds later (the providers' webhooks)
     rows.forEach(r => setTimeout(() => {
@@ -93,8 +95,8 @@
   function runAuto() {
     engineLetters();
     const ignoreQuiet = (() => { try { return localStorage.getItem("cms-iq") === "1"; } catch (e) { return false; } })();
-    const picks = root.CMS_SEND.autoPick(DB.cases, DB.messages, new Date(), { ignoreQuiet });
-    const done = picks.map(x => (cmsSend({ p_phone: x.c.phone, p_stage: x.stage, p_ignore_quiet: ignoreQuiet, p_auto: true }), { name: x.c.name, stage: x.stage }));
+    const picks = [].concat(...["email", "sms"].map(f => root.CMS_SEND.autoPick(DB.cases, DB.messages, new Date(), { ignoreQuiet, flow: f })));
+    const done = picks.map(x => (cmsSend({ p_phone: x.c.phone, p_stage: x.stage, p_ignore_quiet: ignoreQuiet, p_auto: true, p_flow: x.flow }), { name: x.c.name, stage: x.stage }));
     Object.assign(DB.meta, { runs: DB.meta.runs + 1, last_run: new Date().toISOString(), last_sent: done.length, window: root.CMS_SEND.quiet(new Date()) });
     save();
     if (done.length) root.dispatchEvent(new CustomEvent("cms-auto", { detail: done }));
@@ -162,6 +164,8 @@
     rpc: (name, args) => {
       if (name === "coll_set_status") { const e = setStatus(args.p_phone, args.p_status, args.p_note); save(); return wait({ error: e }); }
       if (name === "coll_mark_payout") { DB.payouts.push({ month: args.p_month, ref: args.p_ref, paid_at: new Date().toISOString() }); save(); return wait({ error: null }); }
+      if (name === "cms_set_sms_status") { const e = setEmailStatus(args.p_phone, args.p_status, args.p_note, "sms"); save(); return wait({ error: e }); }
+      if (name === "cms_set_switch") return wait({ error: null });
       if (name === "cms_set_status") { const e = setEmailStatus(args.p_phone, args.p_status, args.p_note); save(); return wait({ error: e }); }
       if (name === "cms_send") return wait(cmsSend(args), 600);
       if (name === "cms_auto_run") return wait({ data: runAuto(), error: null }, 300);
@@ -173,7 +177,7 @@
     functions: { invoke: (name, opt) => {
       const b = (opt && opt.body) || {};
       if (name === "cms-send") {
-        const r = cmsSend({ p_phone: b.phone, p_stage: b.stage, p_ignore_quiet: b.ignore_quiet });
+        const r = cmsSend({ p_phone: b.phone, p_stage: b.stage, p_ignore_quiet: b.ignore_quiet, p_flow: b.flow, p_only: b.only });
         return wait({ data: Object.assign({ ok: !r.error, sent: [], failed: [] }, r.data || {}, r.error ? { ok: false, error: r.error.message } : {}), error: null }, 600);
       }
       if (name === "cms-health") return wait({ data: health(), error: null }, 300 + Math.random() * 300);

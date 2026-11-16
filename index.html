@@ -299,22 +299,51 @@
     return fmt(new Date(+now + (stage <= 2 ? 7 : 14) * DAY));
   }
 
+  // ---------- separate flows (16.11.2026): 📧 email and 📱 SMS each have their own stages, status, timer and history ----------
+  // A flow sees ONLY its own channel's messages and its own status (email_status / sms_status). Deadlines stay shared,
+  // so a customer never gets two different dates for the same stage. No flow given = the old shared behaviour.
+  const STOP = ["סגור", DONE, HOLD, "בתהליך"];
+  // sms_status is empty for every case from before the split: it then follows the email status if SMS already went out,
+  // or if the email flow is paused / closed (so the SMS timer never restarts a case the agents stopped). Otherwise "חדש".
+  function smsStatus(c, allLog) {
+    if (c.sms_status) return c.sms_status;
+    const e = c.email_status || "חדש";
+    if (STOP.includes(e)) return e;
+    return allLog.some(m => m.phone === c.phone && m.channel === "sms") ? e : "חדש";
+  }
+  function view(c, allLog, flow) {
+    const mine = allLog.filter(m => m.phone === c.phone);
+    if (flow !== "email" && flow !== "sms") return { c, log: mine };
+    const log = mine.filter(m => m.channel === flow);
+    if (flow === "email") return { c, log };
+    const first = log.slice().sort((a, b) => a.at.localeCompare(b.at))[0];
+    return { log, c: Object.assign({}, c, { email_status: smsStatus(c, allLog),
+      email_touched_at: c.sms_touched_at || (first && first.at) || (c.sms_status ? null : c.email_touched_at) || null,
+      email_last_at: c.sms_last_at || null }) };
+  }
+
   function plan(c, stage, ctx) {
     ctx = ctx || {};
-    const now = ctx.now || new Date(), log = (ctx.log || []).filter(m => m.phone === c.phone);
+    const flow = ctx.flow === "email" || ctx.flow === "sms" ? ctx.flow : null;
+    const all = (ctx.log || []).filter(m => m.phone === c.phone);
+    const V = view(c, all, flow);
+    c = V.c;
+    const now = ctx.now || new Date(), log = V.log;
+    if (flow) ctx = Object.assign({}, ctx, { alone: flow, emailOnly: false });     // a flow sends its own channel only
     const errors = [], warnings = [];
     const sent = s => log.some(m => m.stage === s && m.status !== "failed");
 
     // 1. the case. The email/SMS flow has its OWN status (email_status), separate from the WhatsApp status.
     //    Shared between the flows: the customer details, and a payment verified in Stripe (it ends both).
-    const st = c.email_status || "חדש";
-    if (st === "סגור") errors.push("התיק סגור בזרימת המייל/SMS");
+    const st = c.email_status || "חדש", FN = flow === "sms" ? "ה-SMS" : flow === "email" ? "המייל" : "המייל/SMS";
+    if (st === "סגור") errors.push(`התיק סגור בזרימת ${FN}`);
     if (isPaid(c) || String(c.status).startsWith("שולם")) errors.push("התיק שולם (אומת ב-Stripe)");
     if (st === DONE) errors.push("הלקוח אמר ששילם: ממתינים לאימות התשלום");
     if (st === HOLD) errors.push("התיק בבדיקה/המתנה");
     if (c.status && c.status !== "חדש") warnings.push(`לידיעה: בוואטסאפ הלקוח בסטטוס "${c.status}" (זרימה נפרדת)`);
     // 2. the stage
     const only = ctx.only === "email" || ctx.only === "sms" ? ctx.only : null;
+    if (only && flow && only !== flow) errors.push("שליחה חוזרת רק לערוץ של הזרימה הזו");
     const bad = st2 => st2 === "failed" || st2 === "bounced";
     if (only) {
       // backup send: the stage went out, but this one channel failed. Resend only it, same texts and deadline.
@@ -339,6 +368,8 @@
     const off = ctx.off || {};
     const alone = only ? null : ctx.alone === "email" || ctx.alone === "sms" ? ctx.alone : ctx.emailOnly ? "email" : null;   // agent's choice in the send window
     let hasEmail = email && !(off.email && !only) && alone !== "sms";   // the texts still say "we also emailed you" on an SMS-only resend (not when no email goes out now)
+    // SMS flow: the SMS says "the details are in your email" only if an email of this stage (or earlier) really went out
+    if (flow === "sms") hasEmail = all.some(m => m.channel === "email" && m.stage <= stage && m.status !== "failed" && m.status !== "bounced");
     if (only === "email") { if (!email) errors.push("אין כתובת מייל תקינה ללקוח"); sms = false; }
     if (only === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין"); email = false; }
     if (alone === "email") { if (!email) errors.push("אין כתובת מייל תקינה: אי אפשר לשלוח מייל בלבד"); sms = false; }
@@ -352,21 +383,22 @@
     if ((off.email || off.sms) && !email && !sms && !errors.length) errors.push("אין ערוץ פתוח לשליחה: הערוץ כבוי במתג הראשי");
     if (log.some(m => m.channel === "email" && (m.status === "failed" || m.status === "bounced"))) warnings.push("מייל קודם ללקוח הזה חזר (נכשל). לבדוק את הכתובת");
 
-    const prev = only && log.find(m => m.stage === stage && m.due);
-    const due = prev ? prev.due : dueFor(c, stage, log, now);         // a resend keeps the deadline the customer already got
+    const prev = (only && log.find(m => m.stage === stage && m.due)) || (flow && all.find(m => m.stage === stage && m.due));
+    const due = prev ? prev.due : dueFor(c, stage, flow ? all : log, now);   // a resend / the other flow's same stage keeps the deadline the customer already got         // a resend keeps the deadline the customer already got
     const msg = T.render(c, stage, { due, hasEmail, now });
     if (sms && msg.smsInfo.parts > 2) warnings.push(`ה-SMS ארוך: ${msg.smsInfo.parts} חלקים`);
     return { ok: errors.length === 0, errors, warnings, stage, due, channels: { email, sms },
-             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only, alone, emailOnly: alone === "email" };
+             to: { email: email ? c.email : null, sms: sms ? c.phone : null }, msg, statusAfter: T.STATUS_AFTER[stage], only, alone, emailOnly: alone === "email", flow, flowStatus: st };
   }
 
   // where a customer stands in the 4 stages, and when the next one is due (same days as the WhatsApp flow):
   // Email/SMS timer (the user's decision 12.11.2026): stage 1 (agent) day 0 -> stage 2 day 3 -> stage 3 letter day 8 -> stage 4 day 11.
   // All counted from the day stage 1 was sent. (The WhatsApp flow keeps its own timing.)
   // Uses ONLY the email/SMS flow: its log and its own status (email_status). The WhatsApp status is not used here.
-  function track(c, allLog, now) {
+  function track(c, allLog, now, flow) {
     now = now || new Date();
-    const log = allLog.filter(m => m.phone === c.phone).sort((a, b) => a.at.localeCompare(b.at));
+    const V = view(c, allLog, flow); c = V.c;
+    const log = V.log.sort((a, b) => a.at.localeCompare(b.at));
     const ok = log.filter(m => m.status !== "failed");
     const at = s => { const m = ok.find(x => x.stage === s); return m ? new Date(m.at) : null; };
     const st = c.email_status || "חדש";
@@ -394,7 +426,7 @@
       email: (lastStage.find(m => m.channel === "email") || {}).status || null,     // delivery of the last stage, per channel
       sms: (lastStage.find(m => m.channel === "sms") || {}).status || null,
       failed: log.some(m => m.status === "failed" || m.status === "bounced"),
-      closed, waiting, talking, status: st, count: log.length,
+      closed, waiting, talking, status: st, count: log.length, flow: flow || null,
     };
   }
 
@@ -402,13 +434,13 @@
   function autoPick(cases, allLog, now, opt) {
     now = now || new Date(); opt = opt || {};
     if (quiet(now) && !opt.ignoreQuiet) return [];
-    return cases.map(c => ({ c, t: track(c, allLog, now) }))
+    return cases.map(c => ({ c, t: track(c, allLog, now, opt.flow) }))
       .filter(({ t }) => t.auto && t.dueNow && !t.blocked)
-      .map(({ c, t }) => ({ c, stage: t.next, plan: plan(c, t.next, { log: allLog, now, ignoreQuiet: opt.ignoreQuiet }) }))
+      .map(({ c, t }) => ({ c, stage: t.next, flow: opt.flow || null, plan: plan(c, t.next, { log: allLog, now, ignoreQuiet: opt.ignoreQuiet, flow: opt.flow, off: opt.off }) }))
       .filter(x => x.plan.ok);
   }
 
-  root.CMS_SEND = { plan, track, autoPick, quiet, holiday, nextWindow, when, validEmail, validPhone, fmt };
+  root.CMS_SEND = { plan, track, autoPick, smsStatus, view, quiet, holiday, nextWindow, when, validEmail, validPhone, fmt };
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>try { if (localStorage.getItem("theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch (e) {}</script>
@@ -449,7 +481,7 @@ header .btn:hover{background:rgba(255,255,255,.25)}
 /* ---------- cases: list + panel ---------- */
 .grid{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.4fr);gap:16px;align-items:start}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
-.list,#det{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+.list,#det{position:sticky;top:calc(var(--navh,0px) + 12px);max-height:calc(100vh - var(--navh,0px) - 24px);overflow:auto}   /* below the pinned tab bar, never under it */
 .list{padding:0}
 .tools{position:sticky;top:0;z-index:2;background:var(--card);display:flex;gap:8px;flex-wrap:wrap;padding:12px;border-bottom:1px solid var(--line)}
 .tools input,.tools select{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
@@ -567,9 +599,9 @@ body.wide .wrap{max-width:none}
 .col .row .side>*{min-width:0;overflow-wrap:anywhere}
 .col .row .chip{white-space:normal}
 .col .row .chip{display:none}.col .row .chip.bad,.col .row .chip.warn{display:inline}
-#vCases.board #det{position:fixed;top:0;left:0;bottom:0;width:min(660px,100%);max-height:none;z-index:20;border-radius:0;border:0;box-shadow:8px 0 40px rgba(20,22,40,.25)}
+#vCases.board #det{position:fixed;top:0;left:0;bottom:0;width:min(660px,100%);max-height:none;z-index:36;border-radius:0;border:0;box-shadow:8px 0 40px rgba(20,22,40,.25)}
 #vCases.board:not(.open) #det,#vCases:not(.board) .shade,#vCases.board:not(.open) .shade{display:none}
-.shade{position:fixed;inset:0;background:rgba(20,22,40,.35);z-index:19}
+.shade{position:fixed;inset:0;background:rgba(20,22,40,.35);z-index:35}   /* drawers open ABOVE the tab bar (z 30) */
 #vCases.board .back{display:inline-flex}
 
 /* payroll */
@@ -672,6 +704,10 @@ button.kpi{font:inherit;text-align:inherit;cursor:pointer;color:inherit}button.k
 .kpi small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
 .kpi.bad{background:var(--badbg);border-color:#fca5a5}.kpi.bad b{color:var(--bad)}
 .tbox{margin-bottom:16px;overflow:hidden}
+.fsw{display:flex;gap:6px;margin:0 0 8px}
+.fsw button{flex:1;border:1px solid var(--line,#e3e3ea);background:transparent;border-radius:10px;padding:7px 10px;font:inherit;font-weight:700;cursor:pointer;color:inherit}
+.fsw button.on{border-color:var(--acc,#7b56de);background:var(--accbg,#f1ecff);color:var(--acc,#7b56de)}
+.fsw .mute{font-weight:500;font-size:12px}
 .alone{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .alone label{display:flex;gap:6px;align-items:center;padding:6px 10px;border:1px solid var(--line,#ddd);border-radius:999px;cursor:pointer;font-size:13px;font-weight:600}
 .alone label.on{border-color:var(--acc,#7b56de);background:var(--accbg,#f1ecff);color:var(--acc,#7b56de)}
@@ -705,7 +741,7 @@ button.kpi{font:inherit;text-align:inherit;cursor:pointer;color:inherit}button.k
 .cl{overflow:visible}
 .cu1{display:grid;grid-template-columns:56px minmax(150px,1.3fr) 120px minmax(150px,1.4fr) 110px 120px;gap:12px;align-items:center;padding:10px 16px;cursor:pointer}
 .cu{border-bottom:1px solid var(--soft)}.cu:hover{background:#fafbff}.cu.op{background:var(--accbg)}
-.cuh{position:sticky;top:50px;z-index:2;background:#fff;border-bottom:1px solid var(--line)}
+.cuh{position:sticky;top:var(--navh,0px);z-index:2;background:#fff;border-bottom:1px solid var(--line)}
 .cuh .cu1{cursor:default;font-size:12px;color:var(--mute);font-weight:700;padding:8px 16px}
 .cu .ct{font-size:13px;color:var(--mute)}.cu .cn{display:grid;min-width:0}.cu .cn b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cu .cn .mute{font-size:12px}
 .cu .cph{font-size:14px;text-align:right}.cu .cem{font-size:13px;color:#33364a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -846,7 +882,7 @@ img,iframe,svg{max-width:100%}
   header .sp{display:block;flex:1 1 0;min-width:0}
   header>.btn{padding:5px 10px;font-size:13px;flex:none}
   /* tabs: an app-style bar at the bottom, in thumb reach, all 5 always visible */
-  .nav{position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);gap:2px;border-top:1px solid var(--line);border-bottom:0;box-shadow:0 -4px 16px rgba(20,22,40,.08);overflow:visible;z-index:35}
+  .nav{position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(6,1fr);gap:2px;border-top:1px solid var(--line);border-bottom:0;box-shadow:0 -4px 16px rgba(20,22,40,.08);overflow:visible;z-index:35}
   .nav .ng,.nav .ng:first-child{display:contents}.nav .nb{display:contents}
   .nav .tab{white-space:normal;text-align:center;line-height:1.25;font-size:11.5px;padding:7px 2px;min-height:52px;border-radius:10px;border-bottom:0;display:flex;align-items:center;justify-content:center}
   .nav .tab.on{border-bottom:0}
@@ -1157,7 +1193,8 @@ async function load(){
   MSGS = ms.data || []; CEV = ce.data || []; WAEV = we.data || [];
   // the email/SMS flow keeps its own status in cms_cases (coll_cases is not changed): put it on each case
   const EC = Object.fromEntries((ec.data || []).map(r => [r.phone, r]));
-  (c.data || []).forEach(x => { const e = EC[x.phone]; x.email_status = e ? e.email_status : "חדש"; x.email_touched_at = e ? e.email_touched_at : null; x.email_last_at = e ? e.email_last_at : null; });
+  (c.data || []).forEach(x => { const e = EC[x.phone]; x.email_status = e ? e.email_status : "חדש"; x.email_touched_at = e ? e.email_touched_at : null; x.email_last_at = e ? e.email_last_at : null;
+    x.sms_status = e ? e.sms_status || null : null; x.sms_touched_at = e ? e.sms_touched_at : null; x.sms_last_at = e ? e.sms_last_at : null; });
   ALLCASES = c.data || [];                                     // tracking also counts closed / paid cases
   if (c.error) { LOAD_FAIL = true; upd(); return toast("לא הצלחתי לרענן את התיקים, מנסה שוב בעוד כמה דקות"); }
   CASES = (c.data || []).filter(x => !isPaid(x));            // paid and verified = gone from the desk
@@ -1478,53 +1515,58 @@ function openCase(phone, keepScroll){
 // which checks the same rules again, logs the messages, moves the status and later reports delivery.
 const CH = { email: "📧 מייל", sms: "💬 SMS" }, MST = { queued: ["בתור", ""], sent: ["נשלח", "warn"], delivered: ["נמסר", "ok"], failed: ["נכשל", "bad"], bounced: ["חזר", "bad"] };
 // ---------- CMS: the email/SMS case panel (a drawer of its own; the WhatsApp panel is not used here) ----------
-// Same customer details as WhatsApp. Its OWN status (email_status) and history (cms_events), changed only here.
+// Same customer details as WhatsApp. Each flow (📧 email, 📱 SMS) has its OWN status, stages and history, changed only here.
 const ESTAT = ["נשלחה הודעה", "בתהליך", HOLD, DONE, "נשלח מכתב התראה", "סגור"];
-let EP = null, CEV = [];
+let EP = null, EF = "email", CEV = [];                              // EF = which flow the open case panel shows
+const FNM = { email: "📧 מייל", sms: "📱 SMS" };
+const flowSt = (c, f) => f === "sms" ? CMS_SEND.smsStatus(c, MSGS) : c.email_status || "חדש";   // a flow's current status
+const evIn = (e, f) => (e.flow || "email") === f || (!e.flow && f === "sms" && /SMS/.test(e.note || ""));   // old shared rows that mention SMS show on both
 const echip = st => `<span class="chip st" style="--sc:${COLC[st || "חדש"] || "#6b7085"}">${esc(st || "חדש")}</span>`;
 const hm = iso => new Date(iso).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-function openEmail(phone){
+function openEmail(phone, flow){
   const c = ALLCASES.find(x => x.phone === phone); if (!c) return;
-  EP = phone;
-  const t = CMS_SEND.track(c, MSGS), mine = MSGS.filter(m => m.phone === phone).sort((a, b) => b.at.localeCompare(a.at));
-  const ev = CEV.filter(e => e.phone === phone).sort((a, b) => b.at.localeCompare(a.at));
-  const st = c.email_status || "חדש", cur = ESTAT.indexOf(st);
+  const F = flow === "sms" || flow === "email" ? flow : EF, OF = F === "sms" ? "email" : "sms", isE = F === "email";
+  EP = phone; EF = F;
+  const t = CMS_SEND.track(c, MSGS, new Date(), F), mine = MSGS.filter(m => m.phone === phone && m.channel === F).sort((a, b) => b.at.localeCompare(a.at));
+  const ev = CEV.filter(e => e.phone === phone && evIn(e, F)).sort((a, b) => b.at.localeCompare(a.at));
+  const st = t.status || "חדש", cur = ESTAT.indexOf(st), ot = CMS_SEND.track(c, MSGS, new Date(), OF);
   const sentStage = s => { const g = mine.filter(m => m.stage === s && m.status !== "failed"); return g.length ? g : null; };
   const card = (cls, what, more) => `<div class="nextc ${cls}"><div class="lbl">הצעד הבא</div><div class="what">${what}</div>${more || ""}</div>`;
-  const nx = t.closed ? card("calm", isPaid(c) ? "✓ שולם ואומת ב-Stripe" : "התיק סגור בזרימת המייל/SMS")
+  const nx = t.closed ? card("calm", isPaid(c) ? "✓ שולם ואומת ב-Stripe" : `התיק סגור בזרימת ${FNM[F]}`)
     : t.waiting ? card("calm", `${esc(st)}: לא שולחים שלב הבא עד שמתבהר`)
     : t.talking ? card("", "בתהליך מול הלקוח", `<div class="mute">השלב הבא לא נשלח לבד. כשהשיחה נגמרת, לשנות סטטוס או לשלוח את השלב הבא מהרשימה למטה.</div>`)
     : !t.next ? card("calm", "כל 4 השלבים נשלחו")
     : t.blocked ? card("", `שלב ${t.next} · ${CMS_T.NAMES[t.next]}: ${t.blocked}`)
     : t.manualDue ? card("hot", "לשלוח עכשיו: שלב 1 · פנייה ראשונה",
-        `<div class="mute">אחרי השליחה, שלבים 2–4 יישלחו אוטומטית לפי הימים (א׳–ה׳, 08:00–20:00).</div><div class="btns" style="margin:8px 0 0"><button class="btn send big" data-es="1">📧💬 תצוגה ושליחה</button></div>`)
+        `<div class="mute">אחרי השליחה, שלבים 2–4 יישלחו אוטומטית לפי הימים (א׳–ה׳, 08:00–20:00).</div><div class="btns" style="margin:8px 0 0"><button class="btn send big" data-es="1">${FNM[F]} · תצוגה ושליחה</button></div>`)
     : card("auto", `⏱ יישלח אוטומטית: שלב ${t.next} · ${CMS_T.NAMES[t.next]}`,
         `<div class="mute">${t.sendAtText}. אין צורך ללחוץ. כדי לעצור: לשנות סטטוס ל"בתהליך" או "בבדיקה/המתנה".</div><div class="btns" style="margin:8px 0 0"><button class="btn sm" data-es="${t.next}">תצוגה (אפשר לשלוח עכשיו במקום לחכות)</button></div>`);
   $("#epb").innerHTML = `
     <div class="dhead">
       <button class="btn sm" id="epx">✕ סגירה</button>
+      <div class="fsw">${["email", "sms"].map(f => `<button class="${f === F ? "on" : ""}" data-fl="${f}">${FNM[f]} <span class="mute">${esc(flowSt(c, f))}</span></button>`).join("")}</div>
       <h2>${esc(c.name)} ${echip(st)}</h2>
       <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${c.email ? esc(c.email) : `<span class="wn">אין מייל</span>`}</span></div>
       <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.email ? `<button class="btn sm" data-copy="${esc(c.email)}">📋 העתק מייל</button>` : ""}</div>
       ${phaseLine(t)}
-      <div class="wahint">💬 בוואטסאפ: <b>${esc(c.status)}</b> · זרימה נפרדת, לא משתנה מכאן</div>
+      <div class="wahint">💬 וואטסאפ: <b>${esc(c.status)}</b> · ${FNM[OF]}: <b>${esc(ot.status)}</b>${ot.stage ? ` (שלב ${ot.stage})` : ""} · כל זרימה נפרדת, לא משתנה מכאן</div>
     </div>
     <div class="dbody">
       ${nx}
-      <h3>סטטוס מייל / SMS</h3>
+      <h3>סטטוס ${FNM[F]}</h3>
       <div class="steps">${ESTAT.map((s, i) => `<button class="btn ${s === st ? "p" : i < cur ? "past" : ""}" data-est="${s}">${s}</button>`).join("")}</div>
-      <div class="hint">הסטטוס של זרימת המייל/SMS בלבד. שליחת שלב מעדכנת אותו לבד, ואפשר גם לשנות ידנית.</div>
+      <div class="hint">הסטטוס של זרימת ${FNM[F]} בלבד. שליחת שלב מעדכנת אותו לבד, ואפשר גם לשנות ידנית.${F === "sms" && !c.sms_status ? " (עדיין לפי המייל, מתיק מלפני הפיצול)" : ""}</div>
       <h3>4 השלבים</h3>
-      <div class="stg">${[1, 2, 3, 4].map(s => { const g = sentStage(s), e = g && g.find(m => m.channel === "email"), m = g && g.find(m => m.channel === "sms");
+      <div class="stg">${[1, 2, 3, 4].map(s => { const g = sentStage(s), e = g && g[0];
         return `<div class="sr ${g ? "done" : t.next === s && !t.closed && !t.waiting ? "nx" : ""}"><b>${g ? "✓" : s}</b><div class="sx"><div>שלב ${s} · ${CMS_T.NAMES[s]}</div>
-          <div class="mute">${g ? `נשלח ${hm(g[g.length - 1].at)} · 📧 ${DLV(e && e.status, e)} · 💬 ${DLV(m && m.status, m)} · מועד ללקוח ${esc(g[0].due || "")}`
+          <div class="mute">${g ? `נשלח ${hm(g[g.length - 1].at)} · ${DLV(e && e.status, e)} ${esc(MST[e.status] ? MST[e.status][0] : "")} · מועד ללקוח ${esc(g[0].due || "")}`
             : t.next === s ? (s === 1 ? "ממתין לשליחה ידנית" : t.blocked ? "⏱ " + t.blocked : "⏱ אוטומטי · " + t.sendAtText) : s > 1 ? "⏱ אוטומטי" : "עוד לא"}</div></div>
-          ${g ? RSB(phone, s, "email") + RSB(phone, s, "sms") : ""}<button class="btn sm" data-es="${s}">${g ? "תצוגה" : "תצוגה ושליחה"}</button></div>`; }).join("")}</div>
-      <h3>מיילים ו-SMS שנשלחו</h3>
+          ${g ? RSB(phone, s, F) : ""}<button class="btn sm" data-es="${s}">${g ? "תצוגה" : "תצוגה ושליחה"}</button></div>`; }).join("")}</div>
+      <h3>${isE ? "מיילים שנשלחו" : "SMS שנשלחו"}</h3>
       <div class="mlog">${mine.map(m => `<div class="m"><b>${CH[m.channel]}</b> שלב ${m.stage} · ${esc(CMS_T.NAMES[m.stage])}
         <span class="mute">${hm(m.at)} · ${esc(m.channel === "sms" ? local(m.to) : m.to)}</span>
-        <span class="chip ${MST[m.status][1]} st">${MST[m.status][0]}</span>${WHY(m) ? `<div class="er" style="width:100%" title="${esc(m.error || "")}">${esc(WHY(m))}</div>` : ""}</div>`).join("") || `<p class="mute">עוד לא נשלחו מיילים או SMS לתיק הזה.</p>`}</div>
-      <h3>היסטוריית מייל / SMS</h3>
+        <span class="chip ${MST[m.status][1]} st">${MST[m.status][0]}</span>${WHY(m) ? `<div class="er" style="width:100%" title="${esc(m.error || "")}">${esc(WHY(m))}</div>` : ""}</div>`).join("") || `<p class="mute">עוד לא נשלחו ${isE ? "מיילים" : "SMS"} לתיק הזה.</p>`}</div>
+      <h3>היסטוריית ${FNM[F]}</h3>
       ${ev.map(e => `<div class="ev"><b>${esc(e.status)}</b> · ${new Date(e.at).toLocaleString("he-IL")}${e.note ? "\n" + esc(e.note) : ""}</div>`).join("") || `<p class="mute">אין עדיין.</p>`}
       <h3>הזמנות ומשלוחים</h3>
       ${(c.orders || []).map(o => `<div class="order"><b>${esc(o.order)}</b> · ${esc(o.order_date)} · ${esc(o.amount)}<br><span class="mute">${esc(o.products)}</span>
@@ -1534,8 +1576,9 @@ function openEmail(phone){
   $("#ep").classList.remove("hide");
   $("#epx").onclick = closeEmail;
   $("#epb").querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
-  $("#epb").querySelectorAll("[data-es]").forEach(b => b.onclick = () => openSend(phone, Number(b.dataset.es)));
-  $("#epb").querySelectorAll("[data-resend]").forEach(b => b.onclick = () => { const [p, s, ch] = b.dataset.resend.split("|"); openSend(p, Number(s), ch); });
+  $("#epb").querySelectorAll("[data-fl]").forEach(b => b.onclick = () => openEmail(phone, b.dataset.fl));
+  $("#epb").querySelectorAll("[data-es]").forEach(b => b.onclick = () => openSend(phone, Number(b.dataset.es), undefined, F));
+  $("#epb").querySelectorAll("[data-resend]").forEach(b => b.onclick = () => { const [p, s, ch] = b.dataset.resend.split("|"); openSend(p, Number(s), ch, ch); });
   $("#epb").querySelectorAll("[data-est]").forEach(b => b.onclick = async () => {
     const to = b.dataset.est;
     if (to === st) return;
@@ -1543,40 +1586,39 @@ function openEmail(phone){
       b.classList.add("sure"); b.textContent = "ללחוץ שוב לסגירה";
       return setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = "סגור"; } }, 4000);
     }
-    const { error } = await SB.rpc("cms_set_status", { p_phone: phone, p_status: to, p_note: "עודכן ידנית" });
+    const RPC = isE ? "cms_set_status" : "cms_set_sms_status";        // each flow has its own status
+    const { error } = await SB.rpc(RPC, { p_phone: phone, p_status: to, p_note: "עודכן ידנית" });
     if (error) return toast("שגיאה, הסטטוס לא נשמר: " + error.message);
-    toast("סטטוס מייל/SMS: " + to, async () => { await SB.rpc("cms_set_status", { p_phone: phone, p_status: st, p_note: "בוטל" }); await load(); if (EP === phone) openEmail(phone); });
-    await load(); if (EP === phone) openEmail(phone);
+    toast(`סטטוס ${FNM[F]}: ${to}`, async () => { await SB.rpc(RPC, { p_phone: phone, p_status: st, p_note: "בוטל" }); await load(); if (EP === phone) openEmail(phone, F); });
+    await load(); if (EP === phone) openEmail(phone, F);
   });
 }
 function closeEmail(){ EP = null; $("#ep").classList.add("hide"); }
-async function openSend(phone, stage, only, alone){   // only = "email" | "sms": backup send of that channel alone · alone = "email" | "sms": the agent chose one channel
+async function openSend(phone, stage, only, flow){   // flow = "email" | "sms": which flow sends (its own channel, stage and status) · only = backup send of a failed channel
   const c = ALLCASES.find(x => x.phone === phone); if (!c) return;
   const { data: log } = await SB.from("cms_messages").select("*").eq("phone", phone);
-  const pl = CMS_SEND.plan(c, stage, { log: log || [], ignoreQuiet: TESTQ(), only, alone: only ? undefined : alone, off: OFF() }), m = pl.msg;
+  const pl = CMS_SEND.plan(c, stage, { log: log || [], ignoreQuiet: TESTQ(), only, flow: flow || only || "email", off: OFF() }), m = pl.msg;
+  const F = pl.flow || "email";
   const eo = pl.alone === "email", so = pl.alone === "sms", goTxt = only ? `🔁 שלח שוב: ${only === "email" ? "📧 מייל" : "💬 SMS"}` : pl.channels.email && !pl.channels.sms ? "📧 שלח מייל עכשיו" : pl.channels.sms && !pl.channels.email ? "💬 שלח SMS עכשיו" : "📧💬 שלח עכשיו";
   const onlyName = only === "email" ? "📧 מייל" : only === "sms" ? "💬 SMS" : "";
   const li = (cls, t) => `<li class="${cls}">${cls === "er" ? "⛔" : cls === "wn" ? "⚠️" : "✓"} ${esc(t)}</li>`;
   $("#sbox").innerHTML = `
-    <div class="sh"><h3>${only ? `🔁 שליחה חוזרת · ${onlyName} בלבד · ` : ""}שלב ${stage} · ${esc(m.name)} · ${esc(c.name)}</h3><span class="sp"></span><button class="btn sm" id="sx">✕ סגירה</button></div>
+    <div class="sh"><h3>${FNM[F]} · ${only ? "🔁 שליחה חוזרת · " : ""}שלב ${stage} · ${esc(m.name)} · ${esc(c.name)}</h3><span class="sp"></span><button class="btn sm" id="sx">✕ סגירה</button></div>
     <div class="sg">
       <div class="sl">
         <h4>נשלח אל</h4>
-        <div>${pl.to.email ? "📧 " + esc(pl.to.email) : `<span class="${only || so ? "mute" : "wn"}">📧 לא יישלח מייל${so ? " (נבחר SMS בלבד)" : ""}</span>`}</div>
-        <div>${pl.to.sms ? "💬 " + esc(local(pl.to.sms)) : `<span class="${only || eo ? "mute" : "wn"}">💬 לא יישלח SMS${eo ? " (נבחר מייל בלבד)" : ""}</span>`}</div>
-        ${only || !SW.sms || !SW.email ? "" : `<div class="alone" role="radiogroup" aria-label="מה לשלוח">${[["", "📧💬 מייל + SMS"], ["email", "📧 מייל בלבד"], ["sms", "📱 SMS בלבד"]].map(([v, t]) =>
-          `<label class="${(pl.alone || "") === v ? "on" : ""}"><input type="radio" name="salone" value="${v}" ${(pl.alone || "") === v ? "checked" : ""}> ${t}</label>`).join("")}</div>`}
+        <div>${F === "email" ? (pl.to.email ? "📧 " + esc(pl.to.email) : `<span class="wn">📧 אין כתובת מייל תקינה</span>`) : (pl.to.sms ? "📱 " + esc(local(pl.to.sms)) : `<span class="wn">📱 אין מספר נייד תקין</span>`)}</div>
         <h4>בדיקות</h4>
         <ul class="chk">${pl.errors.map(e => li("er", e)).join("")}${pl.warnings.map(w => li("wn", w)).join("")}${pl.ok && !pl.warnings.length ? li("okk", "הכל תקין") : ""}</ul>
         <h4>אחרי השליחה</h4>
-        <div>${only ? `הסטטוס לא משתנה (השלב כבר נשלח), רק נרשם בהיסטוריה.` : `סטטוס מייל/SMS: <b>${esc(pl.statusAfter)}</b> <span class="mute">(הוואטסאפ לא משתנה)</span>`} · מועד אחרון ללקוח: <b>${esc(pl.due)}</b>${only ? " (אותו מועד)" : ""}</div>
+        <div>${only ? `הסטטוס לא משתנה (השלב כבר נשלח), רק נרשם בהיסטוריה.` : `סטטוס ${FNM[F]}: <b>${esc(pl.statusAfter)}</b> <span class="mute">(${F === "sms" ? "המייל" : "ה-SMS"} והוואטסאפ לא משתנים)</span>`} · מועד אחרון ללקוח: <b>${esc(pl.due)}</b>${only ? " (אותו מועד)" : ""}</div>
         ${pl.to.sms ? `<h4>💬 SMS · ${m.smsInfo.len} תווים · ${m.smsInfo.parts} ${m.smsInfo.parts === 1 ? "הודעה" : "חלקים"}</h4><div class="bub">${esc(m.sms)}</div>` : ""}
       </div>
       <div>
         ${pl.to.email ? `<div class="mh"><div class="mute">מאת: Smiley · מחלקת הכספים</div><div class="s">${esc(m.subject)}</div><div class="mute">${esc(m.pre)}</div>
           ${m.attach ? `<span class="att">📎 ${esc(m.attach)}</span>` : ""}</div><iframe id="sif" title="תצוגת המייל"></iframe>`
           : only === "sms" ? `<div class="empty">שליחה חוזרת של ה-SMS בלבד. המייל לא נשלח שוב.</div>`
-          : so ? `<div class="empty">נבחר SMS בלבד: מייל לא יישלח בשלב הזה.</div>`
+          : so ? `<div class="empty">📱 זרימת ה-SMS שולחת SMS בלבד.<br>המייל נשלח בנפרד, מהטאב 📧 מייל.</div>`
           : !SW.email ? `<div class="empty">המייל כבוי במתג הראשי: נשלח SMS בלבד.</div>`
           : `<div class="empty">אין כתובת מייל תקינה, לכן נשלח SMS בלבד.<br>כדאי להמשיך עם הלקוח בוואטסאפ.</div>`}
       </div>
@@ -1589,19 +1631,24 @@ async function openSend(phone, stage, only, alone){   // only = "email" | "sms":
   if ($("#sif")) $("#sif").srcdoc = m.html;
   $("#sm").classList.remove("hide");
   const close = () => $("#sm").classList.add("hide");
-  document.querySelectorAll('[name="salone"]').forEach(r => r.onchange = e => openSend(phone, stage, only, e.target.value || undefined));
   $("#sx").onclick = close; $("#sx2").onclick = close; $("#sm").onclick = e => { if (e.target.id === "sm") close(); };   // no "return false": that would cancel clicks inside the window (radio buttons)
   $("#sgo").onclick = async () => {
     if (!pl.ok) return;
     $("#sgo").disabled = true; $("#sgo").textContent = "שולח…";
     // the server (Edge Function cms-send) checks every rule again, sends, logs and moves the email/SMS status
-    const { data, error } = await SB.functions.invoke("cms-send", { body: { phone, stage, ignore_quiet: TESTQ(), ...(only ? { only } : {}), ...(pl.alone ? { alone: pl.alone } : {}) } });
+    const { data, error } = await SB.functions.invoke("cms-send", { body: { phone, stage, ignore_quiet: TESTQ(), flow: F, ...(only ? { only } : {}) } });
     const why = error ? error.message : data && !data.ok ? data.error || (data.errors || []).join(" · ") : "";
     if (why) { $("#sgo").textContent = goTxt; $("#sgo").disabled = false; await load(); return toast("לא נשלח: " + why); }
-    close(); toast(only ? `🔁 שלב ${stage}: ${CH[only]} נשלח שוב` : `שלב ${stage} נשלח: ${data.sent.map(x => CH[x]).join(" + ")}${data.failed && data.failed.length ? ` · נכשל: ${data.failed.map(x => CH[x]).join(" + ")}` : ""} · סטטוס מייל/SMS: ${data.statusAfter}`);
-    await load(); if (EP === phone) openEmail(phone);
+    close(); toast(only ? `🔁 שלב ${stage}: ${CH[only]} נשלח שוב` : `שלב ${stage} נשלח: ${data.sent.map(x => CH[x]).join(" + ")}${data.failed && data.failed.length ? ` · נכשל: ${data.failed.map(x => CH[x]).join(" + ")}` : ""} · סטטוס ${FNM[F]}: ${data.statusAfter}`);
+    await load(); if (EP === phone) openEmail(phone, F);
   };
 }
+// the tab bar is pinned on top (desktop): sticky panels start below it, so the bar never covers them
+// (measured live: only while the bar is really stuck at the top of the screen; 0 on phones, where it sits at the bottom)
+const navH = () => { const n = $("#nav"); if (!n) return; const r = n.getBoundingClientRect();
+  const stuck = getComputedStyle(n).position !== "fixed" && r.top <= 1 && r.bottom > 0 && scrollY > 0;
+  document.documentElement.style.setProperty("--navh", (stuck ? Math.round(r.bottom) : 0) + "px"); };
+addEventListener("resize", navH); addEventListener("scroll", navH, { passive: true }); setTimeout(navH, 0);
 document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (!$("#sm").classList.contains("hide")) $("#sm").classList.add("hide"); else if (EP) closeEmail(); });
 $("#eps").onclick = closeEmail;
 const TESTQ = () => !!$("#mq") && $("#mq").checked;           // test only: ignore the sending window (the real server refuses it outside test mode)
@@ -1681,9 +1728,10 @@ const STW = { delivered: "נמסר", sent: "ממתין לאישור", queued: "�
 const WHYS = m => (WHY(m).split(/[:.]/)[0] || "אחר").trim().slice(0, 60);   // short reason, for the summary chips
 function tracking(){
   const CHN = VIEW === "sms" ? "sms" : "email", isE = CHN === "email", NM = isE ? "📧 מייל" : "📱 SMS", OTH = isE ? "ה-SMS" : "המייל";
-  const now = new Date(), T = ALLCASES.map(c => ({ c, t: CMS_SEND.track(c, MSGS, now) }));
+  const now = new Date(), T = ALLCASES.map(c => ({ c, t: CMS_SEND.track(c, MSGS, now, CHN) }));
   const act = T.filter(x => !x.t.closed && !x.t.waiting), due = act.filter(x => x.t.manualDue), autoQ = act.filter(x => x.t.auto);
   const today = jday(Date.now());
+  const badIn = phone => M.some(m => m.phone === phone && BADST(m.status) && !M.some(x => x.phone === m.phone && x.stage === m.stage && !BADST(x.status)));
   const M = MSGS.filter(m => m.channel === CHN), sentToday = M.filter(m => jday(m.at) === today);
   const newToday = act.filter(x => x.t.stage === 0 && x.c.latest && jday(x.c.latest) === today).length;
   // failed on THIS channel and not fixed by a later send of the same stage (on the SMS tab every undelivered SMS counts)
@@ -1694,13 +1742,13 @@ function tracking(){
   // pipeline (email tab only): one column per stage, due-now first
   const cols = [0, 1, 2, 3, 4].map(s => act.filter(x => x.t.stage === s)
     .sort((a, b) => (b.t.manualDue - a.t.manualDue) || ((a.t.sendAt || a.t.due || 0) - (b.t.sendAt || b.t.due || 0))));
-  const card = ({ c, t }) => `<div class="tc ${t.manualDue ? "due" : t.talking ? "talk" : t.blocked ? "blk" : t.auto ? "auto" : t.next ? "sched" : "fin"} ${custBad(c.phone) ? "fl" : ""}" data-open="${c.phone}">
+  const card = ({ c, t }) => `<div class="tc ${t.manualDue ? "due" : t.talking ? "talk" : t.blocked ? "blk" : t.auto ? "auto" : t.next ? "sched" : "fin"} ${badIn(c.phone) ? "fl" : ""}" data-open="${c.phone}">
       <div class="tt"><b>${esc(c.name)}</b><b>${esc(c.total)}</b></div>
-      <div class="mute ph">${esc(local(c.phone))}${c.email ? "" : " · אין מייל"}</div>
+      <div class="mute ph">${esc(local(c.phone))}${isE && !c.email ? " · אין מייל" : ""}</div>
       ${phaseLine(t)}
-      ${t.lastAt ? `<div class="tl">נשלח ${ago(t.lastAt)} · 📧 ${DLV(t.email, lastMsg(c.phone, "email"))} · 💬 ${t.sms === "failed" && !BADST(t.email) && t.email ? SMSSOFT(lastMsg(c.phone, "sms")) : DLV(t.sms, lastMsg(c.phone, "sms"))}</div>` : t.stage ? `<div class="tl mute">סומן ידנית בסטטוס המייל</div>` : `<div class="tl mute">${c.latest && jday(c.latest) === today ? "🆕 נכנס היום" : "עוד לא נשלח דבר"}</div>`}
-      ${custBad(c.phone) ? `<div class="tl er">⚠ מייל חזר: לבדוק כתובת</div>` : ""}
-      ${t.next ? t.manualDue ? `<div class="tn"><span class="er">לשלוח שלב 1 עכשיו</span><button class="btn send sm" data-tsend="${c.phone}|1">📧💬 שלח</button></div>`
+      ${t.lastAt ? `<div class="tl">נשלח ${ago(t.lastAt)} · ${NM} ${DLV(t[CHN], lastMsg(c.phone, CHN))}</div>` : t.stage ? `<div class="tl mute">סומן ידנית בסטטוס</div>` : `<div class="tl mute">${c.latest && jday(c.latest) === today ? "🆕 נכנס היום" : "עוד לא נשלח דבר"}</div>`}
+      ${badIn(c.phone) ? `<div class="tl er">⚠ ${isE ? "מייל חזר / נכשל: לבדוק כתובת" : "SMS לא נמסר"}</div>` : ""}
+      ${t.next ? t.manualDue ? `<div class="tn"><span class="er">לשלוח שלב 1 עכשיו</span><button class="btn send sm" data-tsend="${c.phone}|1">${NM} שלח</button></div>`
         : ""
         : t.talking ? `<div class="tn wn">בתהליך מול הלקוח · השלב הבא לא נשלח לבד</div>` : `<div class="tn mute">כל השלבים נשלחו</div>`}
     </div>`;
@@ -1718,7 +1766,7 @@ function tracking(){
       <button class="btn sw ${on ? "on" : "off"}" data-sw="${CHN}" title="${SW[CHN + "_by"] ? "שונה לאחרונה: " + esc(SW[CHN + "_by"]) : ""}">${NM}: <b>${on ? "פועל" : "כבוי"}</b> <span class="mute">· ${on ? "לכבות" : "להפעיל"}</span></button>
       <span class="mute">${on ? `פועל: ${isE ? "מיילים יוצאים" : "SMS יוצאים"} בכל השלבים` : `כבוי: ${isE ? "לא יוצא מייל" : "לא יוצא SMS"} בכלל, גם לא בשלבים האוטומטיים`}${othOn ? "" : ` · ⚠ גם ${OTH} כבוי`}</span></div>
     <div class="kpis tk">
-      ${isE ? `<button class="kpi main" data-tf="due"><b>${due.length}</b><span>לשלוח עכשיו (שלב 1)</span><small>⏱ ${autoQ.length} בתור האוטומטי (שלבים 2–4)</small></button>
+      ${true ? `<button class="kpi main" data-tf="due"><b>${due.length}</b><span>לשלוח עכשיו (שלב 1)</span><small>⏱ ${autoQ.length} בתור האוטומטי (שלבים 2–4)</small></button>
       <button class="kpi" data-tf="new"><b>${cols[0].length}</b><span>חדשים שעוד לא קיבלו כלום</span><small>${newToday ? `🆕 ${newToday} נכנסו היום` : "&nbsp;"}</small></button>`
       : `<button class="kpi" data-tf="all"><b>${M.length}</b><span>SMS שנשלחו</span><small>מאז ההתחלה</small></button>
       <button class="kpi" data-tf="wait"><b>${wait}</b><span>ממתינים לאישור מסירה</span><small>&nbsp;</small></button>`}
@@ -1728,8 +1776,8 @@ function tracking(){
     </div>
     ${bad.length ? `<div class="card swbar rsn"><b>למה נכשלו</b>${Object.entries(reasons).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="chip bad" data-tf="failed" title="ללחוץ לרשימה">${esc(k)} · ${n}</span>`).join("")}
       ${isE ? "" : `<span class="mute">SMS שלא נמסר ליד מייל שנמסר עדיין נחשב הצלחה בתיק</span>`}</div>` : ""}
-    ${isE ? `<div class="card tbox">
-      <div class="th"><h3>איפה כל לקוח עומד</h3><span class="mute">${act.length} פעילים · ${T.filter(x => x.t.waiting).length} ממתינים לאימות/בהמתנה · ${T.filter(x => x.t.closed).length} סגורים</span></div>
+    ${true ? `<div class="card tbox">
+      <div class="th"><h3>איפה כל לקוח עומד · ${NM}</h3><span class="mute">${act.length} פעילים · ${T.filter(x => x.t.waiting).length} ממתינים לאימות/בהמתנה · ${T.filter(x => x.t.closed).length} סגורים</span></div>
       <div class="tp">${cols.map((cs, s) => `<div class="tcol ${TF.col === String(s) ? "on" : ""}"><div class="tch"><b>${STG[s]}</b><span class="cnt">${cs.length}</span>${cs.filter(x => x.t.manualDue).length ? `<span class="chip bad">${cs.filter(x => x.t.manualDue).length} לשלוח</span>` : cs.filter(x => x.t.auto).length ? `<span class="chip au">⏱ ${cs.filter(x => x.t.auto).length}</span>` : ""}</div>
         <div class="tcb">${cs.map(card).join("") || `<div class="empty">אין לקוחות</div>`}</div></div>`).join("")}</div>
     </div>` : ""}
@@ -1775,9 +1823,9 @@ function tracking(){
     if (error) { toast("לא נשמר: " + error.message); return tracking(); }
     SW[ch] = to; toast(`${ch === "email" ? "📧 מייל" : "📱 SMS"} ${to ? "הופעל" : "כובה"} לכל השליחות`); tracking();
   });
-  document.querySelectorAll("[data-tsend]").forEach(b => b.onclick = e => { e.stopPropagation(); const [p, s] = b.dataset.tsend.split("|"); openSend(p, Number(s)); });
-  document.querySelectorAll("[data-resend]").forEach(b => { if (!b.closest("#epb")) b.onclick = e => { e.stopPropagation(); const [p, s, ch] = b.dataset.resend.split("|"); openSend(p, Number(s), ch); }; });
-  document.querySelectorAll("#vTrack [data-open]").forEach(r => r.onclick = () => openEmail(r.dataset.open));
+  document.querySelectorAll("[data-tsend]").forEach(b => b.onclick = e => { e.stopPropagation(); const [p, s] = b.dataset.tsend.split("|"); openSend(p, Number(s), undefined, CHN); });
+  document.querySelectorAll("[data-resend]").forEach(b => { if (!b.closest("#epb")) b.onclick = e => { e.stopPropagation(); const [p, s, ch] = b.dataset.resend.split("|"); openSend(p, Number(s), ch, ch); }; });
+  document.querySelectorAll("#vTrack [data-open]").forEach(r => r.onclick = () => openEmail(r.dataset.open, CHN));
 }
 
 // ---------- 📊 summary: a rundown of the day / week / month (both flows) ----------
@@ -1841,7 +1889,7 @@ function summary(){
   const emStages = [1, 2, 3, 4].map(n => [n, S.ss.filter(s => s.stage === n).length]);
   // where everything stands now (desk only = not paid)
   const waNow = STATUSES.map(s => [s, CASES.filter(c => c.status === s).length]).filter(x => x[1]);
-  const T = CASES.map(c => ({ c, t: CMS_SEND.track(c, MSGS) }));
+  const T = CASES.map(c => ({ c, t: CMS_SEND.track(c, MSGS, new Date(), "email") }));
   const emNow = [[STG[0], T.filter(x => x.t.stage === 0 && !x.t.closed && !x.t.waiting).length], ...[1, 2, 3, 4].map(n => [STG[n], T.filter(x => x.t.stage === n && !x.t.closed && !x.t.waiting).length]),
     ["ממתינים / בהמתנה", T.filter(x => x.t.waiting).length], ["סגורים במייל", T.filter(x => x.t.closed).length]].filter(x => x[1]);
   const hbars = (rows, color) => { const mx = Math.max(1, ...rows.map(r => r[1])); return rows.map(([t, n]) => `<div class="hb"><span class="hl">${esc(t)}</span><span class="ht"><i style="width:${n / mx * 100}%;background:${color}"></i></span><b>${n}</b></div>`).join("") || `<p class="mute">אין.</p>`; };
@@ -1897,7 +1945,7 @@ function summary(){
   const toAll = phone => { document.querySelector('.tab[data-v="all"]').click(); if (phone) { if (CASES.find(c => c.phone === phone)) openCase(phone); else toast("התיק שולם ואומת, ולכן כבר לא בשולחן"); } };
   $("#goall").onclick = () => toAll(); $("#gotrack").onclick = () => document.querySelector('.tab[data-v="track"]').click();
   document.querySelectorAll("#vSum [data-wa]").forEach(b => b.onclick = () => toAll(b.dataset.wa));
-  document.querySelectorAll("#vSum [data-em]").forEach(b => b.onclick = () => openEmail(b.dataset.em));
+  document.querySelectorAll("#vSum [data-em]").forEach(b => b.onclick = () => openEmail(b.dataset.em, "email"));
   // hover tooltip on the charts
   const tip = $("#ctip");
   document.querySelectorAll("#vSum .cc").forEach(col => {
@@ -1920,14 +1968,14 @@ function timeline(c){
   const items = [
     ...WAEV.filter(e => e.phone === c.phone && !String(e.status).startsWith("שולם")).map(e => ({ at: e.at, f: "wa", tag: "💬 וואטסאפ", what: e.status, note: e.note })),
     ...Object.values(MSGS.filter(m => m.phone === c.phone).reduce((g, m) => { const k = m.stage + "|" + m.at.slice(0, 16); (g[k] = g[k] || []).push(m); return g; }, {}))
-      .map(g => ({ at: g[0].at, f: "em", tag: "📧 מייל + SMS", what: `שלב ${g[0].stage} · ${CMS_T.NAMES[g[0].stage]}`,
+      .map(g => ({ at: g[0].at, f: g.length === 1 && g[0].channel === "sms" ? "sms" : "em", tag: g.length > 1 ? "📧📱 מייל + SMS" : g[0].channel === "sms" ? "📱 SMS" : "📧 מייל", what: `שלב ${g[0].stage} · ${CMS_T.NAMES[g[0].stage]}`,
         note: g.map(m => `${m.channel === "email" ? "מייל" : "SMS"}: ${MST[m.status][0]}${WHY(m) ? " (" + WHY(m) + ")" : ""}`).join(" · "), bad: g.some(m => msgBad(m, g)) })),
-    ...CEV.filter(e => e.phone === c.phone && !String(e.note || "").startsWith("📧💬")).map(e => ({ at: e.at, f: "em", tag: "📧 מייל + SMS", what: "סטטוס: " + e.status, note: e.note, bad: String(e.note || "").includes("⚠") })),
+    ...CEV.filter(e => e.phone === c.phone && !/^(⏱ נשלח אוטומטית · )?(📧💬|📧|💬) שלב/.test(String(e.note || ""))).map(e => ({ at: e.at, f: e.flow === "sms" ? "sms" : "em", tag: e.flow === "sms" ? "📱 SMS" : e.flow === "email" ? "📧 מייל" : "📧📱 מייל + SMS", what: "סטטוס: " + e.status, note: e.note, bad: String(e.note || "").includes("⚠") })),
     ...PAYS.filter(p => p.phone === c.phone && p.amount > 0).map(p => ({ at: p.paid_at, f: "pay", tag: "💰 תשלום", what: `שולם ${ils(p.amount)}`, note: "אומת ב-Stripe" })),
   ].filter(x => !CF.hf || x.f === CF.hf || x.f === "pay").sort((a, b) => b.at.localeCompare(a.at));
   return `<div class="tlh"><b>היסטוריית הודעות</b>
-      <span class="tlst">💬 וואטסאפ: <b>${esc(c.status)}</b></span><span class="tlst em">📧 מייל/SMS: <b>${esc(c.email_status || "חדש")}</b></span><span class="sp"></span>
-      <span class="tlf">${[["", "הכל"], ["wa", "💬 וואטסאפ"], ["em", "📧 מייל + SMS"]].map(([k, t]) => `<button data-hf="${k}" class="${k === CF.hf ? "on" : ""}">${t}</button>`).join("")}</span></div>
+      <span class="tlst">💬 וואטסאפ: <b>${esc(c.status)}</b></span><span class="tlst em">📧 מייל: <b>${esc(c.email_status || "חדש")}</b></span><span class="tlst em">📱 SMS: <b>${esc(CMS_SEND.smsStatus(c, MSGS))}</b></span><span class="sp"></span>
+      <span class="tlf">${[["", "הכל"], ["wa", "💬 וואטסאפ"], ["em", "📧 מייל"], ["sms", "📱 SMS"]].map(([k, t]) => `<button data-hf="${k}" class="${k === CF.hf ? "on" : ""}">${t}</button>`).join("")}</span></div>
     <div class="tli">${items.map(x => `<div class="ti ${x.f} ${x.bad ? "bad" : ""}"><span class="tg">${x.tag}</span><div><b>${esc(x.what)}</b>${x.note ? `<div class="mute">${esc(x.note)}</div>` : ""}</div>
       <span class="mute">${new Date(x.at).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></div>`).join("") || `<p class="mute">עוד לא נשלחו הודעות ללקוח הזה.</p>`}</div>`;
 }

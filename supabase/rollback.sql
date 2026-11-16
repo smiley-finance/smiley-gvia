@@ -2,6 +2,9 @@
 -- (Also delete the Edge Functions cms-send, cms-health, cms-report in the dashboard, and the cms_* vault secrets.)
 select cron.unschedule('cms-bounce') where exists (select 1 from cron.job where jobname = 'cms-bounce');
 select cron.unschedule('cms-auto') where exists (select 1 from cron.job where jobname = 'cms-auto');
+drop function if exists public.cms_set_sms_status(text, text, text);
+alter table if exists public.cms_events drop column if exists flow;
+alter table if exists public.cms_cases drop column if exists sms_status, drop column if exists sms_touched_at, drop column if exists sms_last_at;
 drop function if exists public.cms_set_switch(text, boolean);
 drop table if exists public.cms_switches;
 drop function if exists public.cms_set_status(text, text, text);
