@@ -481,7 +481,7 @@ header .btn:hover{background:rgba(255,255,255,.25)}
 /* ---------- cases: list + panel ---------- */
 .grid{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.4fr);gap:16px;align-items:start}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
-.list,#det{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+.list,#det{position:sticky;top:calc(var(--navh,0px) + 12px);max-height:calc(100vh - var(--navh,0px) - 24px);overflow:auto}   /* below the pinned tab bar, never under it */
 .list{padding:0}
 .tools{position:sticky;top:0;z-index:2;background:var(--card);display:flex;gap:8px;flex-wrap:wrap;padding:12px;border-bottom:1px solid var(--line)}
 .tools input,.tools select{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
@@ -599,9 +599,9 @@ body.wide .wrap{max-width:none}
 .col .row .side>*{min-width:0;overflow-wrap:anywhere}
 .col .row .chip{white-space:normal}
 .col .row .chip{display:none}.col .row .chip.bad,.col .row .chip.warn{display:inline}
-#vCases.board #det{position:fixed;top:0;left:0;bottom:0;width:min(660px,100%);max-height:none;z-index:20;border-radius:0;border:0;box-shadow:8px 0 40px rgba(20,22,40,.25)}
+#vCases.board #det{position:fixed;top:0;left:0;bottom:0;width:min(660px,100%);max-height:none;z-index:36;border-radius:0;border:0;box-shadow:8px 0 40px rgba(20,22,40,.25)}
 #vCases.board:not(.open) #det,#vCases:not(.board) .shade,#vCases.board:not(.open) .shade{display:none}
-.shade{position:fixed;inset:0;background:rgba(20,22,40,.35);z-index:19}
+.shade{position:fixed;inset:0;background:rgba(20,22,40,.35);z-index:35}   /* drawers open ABOVE the tab bar (z 30) */
 #vCases.board .back{display:inline-flex}
 
 /* payroll */
@@ -741,7 +741,7 @@ button.kpi{font:inherit;text-align:inherit;cursor:pointer;color:inherit}button.k
 .cl{overflow:visible}
 .cu1{display:grid;grid-template-columns:56px minmax(150px,1.3fr) 120px minmax(150px,1.4fr) 110px 120px;gap:12px;align-items:center;padding:10px 16px;cursor:pointer}
 .cu{border-bottom:1px solid var(--soft)}.cu:hover{background:#fafbff}.cu.op{background:var(--accbg)}
-.cuh{position:sticky;top:50px;z-index:2;background:#fff;border-bottom:1px solid var(--line)}
+.cuh{position:sticky;top:var(--navh,0px);z-index:2;background:#fff;border-bottom:1px solid var(--line)}
 .cuh .cu1{cursor:default;font-size:12px;color:var(--mute);font-weight:700;padding:8px 16px}
 .cu .ct{font-size:13px;color:var(--mute)}.cu .cn{display:grid;min-width:0}.cu .cn b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cu .cn .mute{font-size:12px}
 .cu .cph{font-size:14px;text-align:right}.cu .cem{font-size:13px;color:#33364a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -882,7 +882,7 @@ img,iframe,svg{max-width:100%}
   header .sp{display:block;flex:1 1 0;min-width:0}
   header>.btn{padding:5px 10px;font-size:13px;flex:none}
   /* tabs: an app-style bar at the bottom, in thumb reach, all 5 always visible */
-  .nav{position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);gap:2px;border-top:1px solid var(--line);border-bottom:0;box-shadow:0 -4px 16px rgba(20,22,40,.08);overflow:visible;z-index:35}
+  .nav{position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(6,1fr);gap:2px;border-top:1px solid var(--line);border-bottom:0;box-shadow:0 -4px 16px rgba(20,22,40,.08);overflow:visible;z-index:35}
   .nav .ng,.nav .ng:first-child{display:contents}.nav .nb{display:contents}
   .nav .tab{white-space:normal;text-align:center;line-height:1.25;font-size:11.5px;padding:7px 2px;min-height:52px;border-radius:10px;border-bottom:0;display:flex;align-items:center;justify-content:center}
   .nav .tab.on{border-bottom:0}
@@ -1643,6 +1643,12 @@ async function openSend(phone, stage, only, flow){   // flow = "email" | "sms": 
     await load(); if (EP === phone) openEmail(phone, F);
   };
 }
+// the tab bar is pinned on top (desktop): sticky panels start below it, so the bar never covers them
+// (measured live: only while the bar is really stuck at the top of the screen; 0 on phones, where it sits at the bottom)
+const navH = () => { const n = $("#nav"); if (!n) return; const r = n.getBoundingClientRect();
+  const stuck = getComputedStyle(n).position !== "fixed" && r.top <= 1 && r.bottom > 0 && scrollY > 0;
+  document.documentElement.style.setProperty("--navh", (stuck ? Math.round(r.bottom) : 0) + "px"); };
+addEventListener("resize", navH); addEventListener("scroll", navH, { passive: true }); setTimeout(navH, 0);
 document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (!$("#sm").classList.contains("hide")) $("#sm").classList.add("hide"); else if (EP) closeEmail(); });
 $("#eps").onclick = closeEmail;
 const TESTQ = () => !!$("#mq") && $("#mq").checked;           // test only: ignore the sending window (the real server refuses it outside test mode)
