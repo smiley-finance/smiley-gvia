@@ -489,6 +489,29 @@ header .btn:hover{background:rgba(255,255,255,.25)}
 .tools input:focus,.tools select:focus{outline:2px solid var(--accbg);border-color:var(--acc)}
 .lbar{width:100%;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}.lbar .sp{flex:1}
 #upd.bad{color:var(--bad);font-weight:700}
+/* 💬 WhatsApp tab = same frame as 📧 / 📱: header bar, 5 counters, board card with stage-style columns and cards, history table */
+.wah{display:none;margin:0;font-size:16px;width:100%}.wah .mute{font-size:13px;font-weight:400}
+#vCases.board .wah{display:block}
+#vCases.board .tools{padding:12px 16px;gap:10px;align-items:center}
+#vCases.board .tools input,#vCases.board .tools select{padding:7px 10px;background:#fff}
+#vCases.board .kbox{border:0;background:none;margin:0}
+#vCases.board .kbin{gap:10px;padding:12px}
+#vCases.board .col{border:0;border-radius:12px;background:var(--soft)}
+#vCases.board .colh{background:#fff;border-radius:12px 12px 0 0;font-size:14px;padding:10px 12px}
+#vCases.board .colh b{font-size:14px;display:inline-flex;align-items:center;gap:6px}
+#vCases.board .colh b::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--c);flex:none}
+#vCases.board .colh .cnt{background:#fff;color:inherit;border:1px solid var(--line);font-weight:500}
+#vCases.board .colh small{width:auto;margin-inline-start:auto}
+#vCases.board .colh .chip{font-size:11px;padding:1px 8px}
+#vCases.board .col.min{background:var(--soft)}
+#vCases.board .colb{display:grid;gap:8px;align-content:start}
+.tc.wc{margin:0}.tc.wc.sel{border-color:var(--acc);background:var(--accbg)}
+.tc.wc.dn{opacity:.6}
+.tc .wst{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:color-mix(in srgb,var(--c) 14%,transparent);color:inherit;font-weight:600;justify-self:start}
+.tc .tn .er{color:var(--bad);font-weight:600}
+#waLog .chip.st{font-size:12px}
+:root[data-theme="dark"] #vCases.board .tools input,:root[data-theme="dark"] #vCases.board .tools select,:root[data-theme="dark"] #vCases.board .colh,:root[data-theme="dark"] #vCases.board .colh .cnt{background:var(--card)}
+:root[data-theme="dark"] .tc.wc.sel{background:var(--accbg)}
 .live{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#fff;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);white-space:nowrap}
 .live i{width:8px;height:8px;border-radius:50%;background:#9aa0ae;flex:none}
 .live.on i{background:#3ee0a3;box-shadow:0 0 0 0 rgba(27,175,122,.5);animation:livep 2.4s infinite}
@@ -1090,11 +1113,13 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
         <button class="tab" data-v="pay">עמלות ושכר</button></div></div>
     </nav>
     <div id="banner" class="card banner hide">מצב עובד: זה מה שהעובד רואה. שינויים שתעשה כאן נשמרים בתיקים, אבל לא נספרים לו לעמלה.</div>
+    <div id="waBar" class="card swbar hide"><b>💬 וואטסאפ</b><span class="mute">שליחה ידנית מהטלפון: פותחים לקוח ← שולחים את ההודעה המוכנה ← מסמנים סטטוס</span></div>
     <div class="kpis" id="kpis"><div class="kpi"><b class="mute">…</b><span>טוען…</span></div></div>
 
     <div id="vCases" class="grid">
       <div class="card list">
         <div class="tools">
+          <h3 class="wah">איפה כל לקוח עומד · 💬 וואטסאפ <span class="mute" id="wacnt"></span></h3>
           <input id="q" placeholder="🔍 חיפוש: שם / טלפון / 4 ספרות אחרונות / הזמנה / מספר מעקב">
           <select id="fs"><option value="">כל הסטטוסים</option></select>
           <select id="srt" class="hide" title="מיון בתוך כל עמודה">
@@ -1108,6 +1133,7 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
       <div class="card" id="det"><div class="empty"><div class="big">👈</div>בחר/י תיק מהרשימה.</div></div>
     </div>
 
+    <div id="waLog" class="card tbox hide"></div>
     <div id="vPay" class="card hide"></div>
     <div id="vTrack" class="hide"></div>
     <div id="vSum" class="hide"></div>
@@ -1292,6 +1318,8 @@ function urg(c){
 }
 function kpis(){
   const m = ym(today()), mine = PAYS.filter(p => p.month === m && p.commissionable);
+  $("#kpis").classList.toggle("tk", VIEW === "all");
+  if (VIEW === "all") return waKpis(mine);
   const left = CASES.filter(next).length, done = CASES.filter(c => !next(c) && doneToday(c)).length, pct = left + done ? Math.round(done * 100 / (left + done)) : 100;
   $("#kpis").innerHTML = `<div class="kpi main"><b>${left}</b><span>לטיפול היום</span>
       <div class="pbar"><i style="width:${pct}%"></i></div><small>טופלו היום: ${done} מתוך ${left + done}</small></div>` + [
@@ -1299,6 +1327,54 @@ function kpis(){
     ["נגבה החודש", ils(mine.reduce((s, p) => s + p.amount - p.refunded, 0))],
     ["עמלה החודש (20%)", ils(mine.reduce((s, p) => s + Number(p.commission), 0))],
   ].map(([t, v]) => `<div class="kpi"><b>${v}</b><span>${t}</span></div>`).join("");
+}
+// 💬 WhatsApp counters, built like the 📧 / 📱 ones: the main tile is what needs a hand now, every tile is clickable
+let WF = { p: "7", st: "", q: "" };                                // WhatsApp history table filters
+function waKpis(mine){
+  const left = CASES.filter(next), done = CASES.filter(c => !next(c) && doneToday(c)).length, pct = left.length + done ? Math.round(done * 100 / (left.length + done)) : 100;
+  const nw = CASES.filter(c => c.status === "חדש"), nwToday = nw.filter(c => c.latest && jday(c.latest) === jday(Date.now())).length;
+  const ver = CASES.filter(c => c.status === DONE), notFound = ver.filter(c => days(c.done_at) >= 1).length;
+  const evToday = WAEV.filter(e => jday(e.at) === jday(Date.now()) && !String(e.status).startsWith("שולם"));
+  $("#kpis").innerHTML = `
+    <button class="kpi main" data-wk="due"><b>${left.length}</b><span>לטיפול עכשיו</span><div class="pbar"><i style="width:${pct}%"></i></div><small>טופלו היום: ${done} מתוך ${left.length + done}</small></button>
+    <button class="kpi" data-wk="new"><b>${nw.length}</b><span>חדשים שעוד לא קיבלו כלום</span><small>${nwToday ? `🆕 ${nwToday} נכנסו היום` : "&nbsp;"}</small></button>
+    <button class="kpi" data-wk="today"><b>${evToday.length}</b><span>פעולות היום</span><small>${new Set(evToday.map(e => e.phone)).size} לקוחות</small></button>
+    <button class="kpi ${notFound ? "bad" : ""}" data-wk="ver"><b>${ver.length}</b><span>ממתינים לאימות תשלום</span><small>${notFound ? `${notFound} לא נמצא תשלום` : "&nbsp;"}</small></button>
+    <button class="kpi" data-wk="pay"><b>${ils(mine.reduce((t, p) => t + p.amount - p.refunded, 0))}</b><span>נגבה החודש</span><small>עמלה ${ils(mine.reduce((t, p) => t + Number(p.commission), 0))}</small></button>`;
+  document.querySelectorAll("[data-wk]").forEach(b => b.onclick = () => {
+    const k = b.dataset.wk, setFs = v => { $("#fs").value = v; render(); };
+    if (k === "due") { setFs(""); return document.querySelector(".tc.wc.due")?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }); }
+    if (k === "new") return setFs("חדש");
+    if (k === "ver") return setFs(DONE);
+    if (k === "today") { Object.assign(WF, { p: "1", st: "" }); waLog(); return $("#waLog").scrollIntoView({ behavior: "smooth" }); }
+    if (k === "pay") document.querySelector('.tab[data-v="sum"]').click();
+  });
+}
+// 💬 history table, like "emails sent": every WhatsApp step an agent marked (from coll_events), newest first
+function waLog(){
+  const days_ = { "1": 1, "7": 7, "30": 30 }[WF.p], from = days_ ? Date.now() - days_ * 864e5 : 0;
+  const nm = p => ALLCASES.find(c => c.phone === p) || { phone: p };
+  const rows = WAEV.filter(e => new Date(e.at) >= from).filter(e => !WF.st || e.status === WF.st)
+    .filter(e => !WF.q || hit(nm(e.phone), WF.q.toLowerCase())).sort((a, b) => b.at.localeCompare(a.at));
+  const sts = [...new Set(WAEV.map(e => e.status))];
+  const sel = (id, v, opts) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+  $("#waLog").innerHTML = `
+    <div class="th"><h3>פעולות וואטסאפ</h3>
+      <input id="wq" placeholder="🔍 שם / טלפון / 4 ספרות" value="${esc(WF.q)}">
+      ${sel("wp", WF.p, [["1", "היום"], ["7", "7 ימים"], ["30", "30 יום"], ["", "הכל"]])}
+      ${sel("wst", WF.st, [["", "כל הסטטוסים"], ...sts.map(x => [x, x])])}
+      <span class="mute">${rows.length} פעולות</span></div>
+    <div class="tbl"><table><tr><th>מתי</th><th>לקוח</th><th>סטטוס</th><th>הערה</th><th>על ידי</th></tr>
+    ${rows.slice(0, 300).map(e => { const c = nm(e.phone); return `<tr data-wo="${e.phone}">
+      <td>${new Date(e.at).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+      <td><b>${esc(c.name || local(e.phone))}</b><br><span class="mute">${esc(local(e.phone))}</span></td>
+      <td><span class="chip st" style="--sc:${COLC[e.status] || (String(e.status).startsWith("שולם") ? "#16a34a" : "#6b7085")}">${esc(e.status)}</span></td>
+      <td class="mute">${esc(e.note || "")}</td><td class="mute">${esc(e.by_email ? e.by_email.split("@")[0] : "מערכת")}</td></tr>`; }).join("") || `<tr><td colspan="5" class="mute">אין פעולות בטווח הזה.</td></tr>`}
+    </table></div>`;
+  $("#wq").oninput = e => { WF.q = e.target.value; waLog(); const i = $("#wq"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+  $("#wp").onchange = e => { WF.p = e.target.value; waLog(); };
+  $("#wst").onchange = e => { WF.st = e.target.value; waLog(); };
+  document.querySelectorAll("#waLog [data-wo]").forEach(r => r.onclick = () => CASES.find(c => c.phone === r.dataset.wo) ? openCase(r.dataset.wo) : toast("התיק שולם ואומת, ולכן כבר לא בשולחן"));
 }
 function chip(c){
   if (c.status === DONE) return days(c.done_at) >= 1 ? `<span class="chip bad">לא נמצא תשלום</span>` : `<span class="chip warn">ממתין לאימות</span>`;
@@ -1313,9 +1389,27 @@ const rowHtml = c => {
       <div class="side">${chip(c)}<b style="font-size:14px">${esc(c.total)}</b>${d < 999 ? `<span class="age ${t && d >= 7 ? "old" : ""}">${d ? `לפני ${d} ימים` : "היום"}</span>` : ""}</div>
     </div>`;
 };
+// board card (💬 tab), same anatomy as the 📧 / 📱 card: name + amount, phone, status, last action, what to do now
+const waCard = c => {
+  const t = next(c), d = days(c.last_action_at || c.latest), dn = !t && doneToday(c), u = urg(c);
+  const cls = t ? (u === "due" ? "talk" : "due") : c.status === DONE ? "blk" : dn ? "fin" : "sched";
+  return `<div class="tc wc ${cls} ${dn ? "dn" : ""} ${SEL === c.phone ? "sel" : ""}" data-p="${c.phone}" style="--c:${COLC[c.status] || "#6b7085"}">
+      <div class="tt"><b>${esc(c.name)}</b><b>${esc(c.total)}</b></div>
+      <div class="mute ph">${esc(local(c.phone))}${c.case_type ? " · " + esc(c.case_type) : ""}</div>
+      ${c.status === DONE ? chip(c) : ""}
+      <div class="tl ${d >= 7 && t ? "" : "mute"}">${c.last_action_at ? `פעולה אחרונה ${d ? `לפני ${d} ימים` : "היום"}` : c.latest && jday(c.latest) === jday(Date.now()) ? "🆕 נכנס היום" : "עוד לא נשלח דבר"}</div>
+      ${t ? `<div class="tn"><span class="${u === "due" ? "" : "er"}">→ ${esc(t)}</span><button class="btn send sm" data-p="${c.phone}">💬 פתח</button></div>`
+        : dn ? `<div class="tn mute">✓ טופל היום</div>` : `<div class="tn mute">אין מה לשלוח עכשיו</div>`}
+    </div>`;
+};
 function render(){
+  const isWa = VIEW === "all";
+  $("#waBar").classList.toggle("hide", !isWa); $("#waLog").classList.toggle("hide", !isWa);
+  if (isWa || VIEW === "pay") kpis();
+  if (isWa) waLog();
   $("#vTrack").classList.toggle("hide", VIEW !== "track" && VIEW !== "sms"); $("#vSum").classList.toggle("hide", VIEW !== "sum"); $("#vCust").classList.toggle("hide", VIEW !== "cust");
-  $("#kpis").classList.toggle("hide", VIEW === "track" || VIEW === "sms" || VIEW === "sum" || VIEW === "cust");   // these tabs have their own counters
+  $("#kpis").classList.toggle("hide", VIEW === "track" || VIEW === "sms" || VIEW === "sum" || VIEW === "cust");
+  if (VIEW !== "all") $("#kpis").classList.remove("tk");   // these tabs have their own counters
   if (VIEW === "cust") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return customers(); }
   if (VIEW === "sum") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return summary(); }
   if (VIEW === "track" || VIEW === "sms") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return tracking(); }
@@ -1342,10 +1436,13 @@ function render(){
     html = `<div class="kbox"><div class="kb" id="kb"><div class="kbin" style="grid-template-columns:${cols.map(s => mini(s) ? "56px" : "minmax(260px,1fr)").join(" ")}">` + cols.map(s => {
       const cs = list.filter(c => c.status === s);
       if (mini(s)) return `<div class="col min" style="--c:${COLC[s]}" data-colt="${s}" title="לחיצה לפתיחת העמודה"><span class="cnt">${cs.length}</span><b>${s}</b></div>`;
-      return `<div class="col" style="--c:${COLC[s]}"><div class="colh"><b>${s}</b><span class="cnt">${cs.length}</span>${fs ? "" : `<button class="colx" data-colt="${s}" title="כיווץ העמודה">⇥</button>`}<small>${ils(cs.reduce((t, c) => t + c.amount / 100, 0))}</small></div>
-        <div class="colb">${cs.map(rowHtml).join("") || `<div class="empty">אין תיקים</div>`}</div></div>`;
+      const todo = cs.filter(next).length;
+      return `<div class="col" style="--c:${COLC[s]}"><div class="colh"><b>${s}</b><span class="cnt">${cs.length}</span>${todo ? `<span class="chip bad">${todo} לטפל</span>` : ""}<small>${ils(cs.reduce((t, c) => t + c.amount / 100, 0))}</small>${fs ? "" : `<button class="colx" data-colt="${s}" title="כיווץ העמודה">⇥</button>`}</div>
+        <div class="colb">${cs.map(waCard).join("") || `<div class="empty">אין לקוחות</div>`}</div></div>`;
     }).join("") + `</div></div></div>`;
     $("#lcount").textContent = `${list.length} תיקים`;
+    const open = CASES.filter(c => c.status !== "סגור");
+    $("#wacnt").textContent = `· ${open.length} פתוחים · ${ils(open.reduce((t, c) => t + c.amount / 100, 0))} · ${CASES.filter(next).length} לטיפול`;
   }
   $("#vCases").classList.toggle("board", VIEW === "all");
   document.body.classList.toggle("wide", VIEW === "all");      // board uses the full window width
@@ -1378,7 +1475,7 @@ document.addEventListener("keydown", e => e.key === "Escape" && $("#vCases").cla
 $("#rows").onclick = e => {
   const t = e.target.closest("[data-colt]");                   // board: collapse / open a column
   if (t) { const s = t.dataset.colt; MIN.has(s) ? MIN.delete(s) : MIN.add(s); ls("minCols", JSON.stringify([...MIN])); return render(); }
-  const r = e.target.closest(".row"); if (r) openCase(r.dataset.p);
+  const r = e.target.closest(".row,.tc.wc,[data-p]"); if (r) openCase(r.dataset.p);
 };
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.remove("on")); t.classList.add("on"); VIEW = t.dataset.v; ls("view", VIEW); render();
@@ -1445,8 +1542,8 @@ async function copyImg(src){
 }
 function openCase(phone, keepScroll){
   const prev = SEL; SEL = phone;
-  document.querySelector(`.row[data-p="${prev}"]`)?.classList.remove("sel");
-  document.querySelector(`.row[data-p="${phone}"]`)?.classList.add("sel");
+  document.querySelector(`.row[data-p="${prev}"],.tc.wc[data-p="${prev}"]`)?.classList.remove("sel");
+  document.querySelector(`.row[data-p="${phone}"],.tc.wc[data-p="${phone}"]`)?.classList.add("sel");
   $("#vCases").classList.add("open");                                   // phone: show the case screen
   const c = CASES.find(x => x.phone === phone);
   if (!c) { $("#det").innerHTML = `<div class="empty">התיק לא נמצא.</div>`; return; }
@@ -1508,8 +1605,8 @@ function openCase(phone, keepScroll){
   document.querySelectorAll("[data-pt]").forEach(b => b.onclick = () => showPane(b.dataset.pt));
   $("#det").scrollTop = keepScroll || prev === phone ? scroll : 0;
   if (prev !== phone && innerWidth <= 860) scrollTo(0, 0);
-  $("#back").onclick = () => { $("#vCases").classList.remove("open"); document.querySelector(`.row[data-p="${phone}"]`)?.scrollIntoView({block: "center"}); };
-  if ($("#nextCase")) $("#nextCase").onclick = () => { openCase(nxt); document.querySelector(`.row[data-p="${nxt}"]`)?.scrollIntoView({block: "nearest"}); };
+  $("#back").onclick = () => { $("#vCases").classList.remove("open"); document.querySelector(`.row[data-p="${phone}"],.tc.wc[data-p="${phone}"]`)?.scrollIntoView({block: "center"}); };
+  if ($("#nextCase")) $("#nextCase").onclick = () => { openCase(nxt); document.querySelector(`.row[data-p="${nxt}"],.tc.wc[data-p="${nxt}"]`)?.scrollIntoView({block: "nearest"}); };
   document.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
   document.querySelectorAll("[data-img]").forEach(b => b.onclick = () => copyImg(b.dataset.img));
   document.querySelectorAll("[data-zoom]").forEach(i => i.onclick = () => window.open(i.dataset.zoom, "_blank"));
