@@ -489,6 +489,11 @@ header .btn:hover{background:rgba(255,255,255,.25)}
 .tools input:focus,.tools select:focus{outline:2px solid var(--accbg);border-color:var(--acc)}
 .lbar{width:100%;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}.lbar .sp{flex:1}
 #upd.bad{color:var(--bad);font-weight:700}
+.drng{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.drng label{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--mute)}
+.drng input{padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card,#fff);color:inherit;font:inherit}
+.drng input:focus{outline:none;box-shadow:var(--ring)}
+@media (max-width:700px){.drng{width:100%}.drng label{flex:1}.drng input{flex:1;min-width:0}}
 /* 💬 WhatsApp tab = same frame as 📧 / 📱: header bar, 5 counters, board card with stage-style columns and cards, history table */
 .wah{display:none;margin:0;font-size:16px;width:100%}.wah .mute{font-size:13px;font-weight:400}
 #vCases.board .wah{display:block}
@@ -2007,7 +2012,9 @@ function tracking(){
 
 // ---------- 📊 summary: a rundown of the day / week / month (both flows) ----------
 // What was done, how much was collected, where everything stands now, and what is still open today.
-let SP = ["1", "7", "30"].includes(ls("sumP")) ? ls("sumP") : "1";
+// period: d = today · w = this week (from Sunday) · m = this month (from the 1st) · c = date range from–to (inclusive)
+let SP = ({ "1": "d", "7": "w", "30": "m" })[ls("sumP")] || (["d", "w", "m", "c"].includes(ls("sumP")) ? ls("sumP") : "d");
+let SF = ls("sumF") || "", ST = ls("sumT") || "";
 const WA_C = "#16a34a", EM_C = "#4f46e5";                       // 💬 WhatsApp / 📧 email+SMS (validated pair)
 const dayKey = d => jday(d);
 function periodStart(p, back = 0){                               // start of the period (Israel days), "back" periods earlier
@@ -2016,6 +2023,28 @@ function periodStart(p, back = 0){                               // start of the
   return d;
 }
 const inP = (iso, a, b) => { const t = new Date(iso); return t >= a && (!b || t < b); };
+const ilToday = () => periodStart("1");                            // today 00:00, Israel
+const ymdIn = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const fromYmd = v => { const [y, m, d] = v.split("-").map(Number); return new Date(y, m - 1, d); };
+const addD = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+// the chosen period + the period it is compared with (same length, just before; for week/month: the same part of the previous one)
+function range(){
+  const t0 = ilToday(), nowIl = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jerusalem" }));
+  const sinceStart = a => nowIl - a;                               // how far into the period we are
+  if (SP === "w") { const a = addD(t0, -t0.getDay()), pa = addD(a, -7);
+    return { a, b: null, pa, pb: new Date(+pa + sinceStart(a)), lbl: "השבוע", cmp: "אותה נקודה בשבוע הקודם", hourly: false, last: t0 }; }
+  if (SP === "m") { const a = new Date(t0.getFullYear(), t0.getMonth(), 1), pa = new Date(t0.getFullYear(), t0.getMonth() - 1, 1);
+    const pb = new Date(Math.min(+new Date(+pa + sinceStart(a)), +a));
+    return { a, b: null, pa, pb, lbl: "החודש", cmp: "אותה נקודה בחודש הקודם", hourly: false, last: t0 }; }
+  if (SP === "c" && SF && ST) {
+    let f = fromYmd(SF), t = fromYmd(ST); if (t < f) [f, t] = [t, f];
+    const b = addD(t, 1), n = Math.round((b - f) / 864e5), pa = addD(f, -n);
+    const one = n === 1, dd = d => d.toLocaleDateString("he-IL");
+    return { a: f, b, pa, pb: f, lbl: one ? dd(f) : `${dd(f)} – ${dd(t)}`, cmp: one ? "היום שלפני" : `${n} הימים שלפני`, hourly: one, last: t, n };
+  }
+  return { a: t0, b: null, pa: addD(t0, -1), pb: new Date(+addD(t0, -1) + sinceStart(t0)), lbl: "היום", cmp: "אתמול באותה שעה", hourly: true, last: t0 };
+}
+let RG = null;
 const sends = () => {                                             // one "send" = both channels of one stage to one customer
   const g = {}; MSGS.forEach(m => { const k = m.phone + "|" + m.stage + "|" + m.at.slice(0, 16); (g[k] = g[k] || { phone: m.phone, stage: m.stage, at: m.at, ch: [] }).ch.push(m); });
   return Object.values(g);
@@ -2034,13 +2063,13 @@ function stats(a, b){
 const delta = (now, before, money) => {
   if (!before && !now) return `<small class="mute">&nbsp;</small>`;
   const d = now - before, t = money ? ils(Math.abs(d)) : Math.abs(d);
-  return `<small class="${d > 0 ? "up" : d < 0 ? "dn" : "mute"}">${d > 0 ? "▲ " + t : d < 0 ? "▼ " + t : "ללא שינוי"} לעומת ${SP === "1" ? "אתמול" : SP === "7" ? "השבוע הקודם" : "החודש הקודם"}</small>`;
+  return `<small class="${d > 0 ? "up" : d < 0 ? "dn" : "mute"}">${d > 0 ? "▲ " + t : d < 0 ? "▼ " + t : "ללא שינוי"} לעומת ${RG.cmp}</small>`;
 };
 // grouped bars: one column per day (or per hour for "today"); thin bars, 4px rounded tops, hover tooltip
 function barChart(id, buckets, series, fmtV){
   const max = Math.max(1, ...buckets.flatMap(b => series.map(s => b[s.k])));
   const nice = (() => { const p = Math.pow(10, Math.floor(Math.log10(max))), m = max / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; })();
-  const every = buckets.length > 16 ? 5 : buckets.length > 10 ? 2 : 1;
+  const every = buckets.length > 62 ? 14 : buckets.length > 31 ? 7 : buckets.length > 16 ? 5 : buckets.length > 10 ? 2 : 1;
   return `<div class="ch" id="${id}">
     <div class="chy">${[nice, nice / 2, 0].map(v => `<span>${Number.isInteger(v) || v >= 10 ? fmtV(v) : ""}</span>`).join("")}</div>
     <div class="chp">${[0, 50, 100].map(y => `<i class="gl" style="bottom:${y}%"></i>`).join("")}
@@ -2050,16 +2079,19 @@ function barChart(id, buckets, series, fmtV){
   </div>`;
 }
 function buckets(){
-  if (SP === "1") {                                               // today: by hour, 08:00–21:00
-    return Array.from({ length: 14 }, (_, i) => 8 + i).map(h => ({ h, label: `היום ${String(h).padStart(2, "0")}:00`, short: String(h), wa: 0, em: 0, pay: 0 }));
+  if (RG.hourly) {                                                // one day: by hour, 08:00–21:00
+    const dl = SP === "d" ? "היום" : RG.a.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
+    return Array.from({ length: 14 }, (_, i) => 8 + i).map(h => ({ h, label: `${dl} ${String(h).padStart(2, "0")}:00`, short: String(h), wa: 0, em: 0, pay: 0 }));
   }
-  return Array.from({ length: Number(SP) }, (_, i) => { const d = periodStart(SP); d.setDate(d.getDate() + i);
+  const n = Math.max(1, Math.round((addD(RG.last, 1) - RG.a) / 864e5));   // every day of the period (up to today)
+  return Array.from({ length: n }, (_, i) => { const d = addD(RG.a, i);
     return { k: dayKey(d), label: d.toLocaleDateString("he-IL", { weekday: "short", day: "2-digit", month: "2-digit" }), short: d.toLocaleDateString("he-IL", { day: "numeric", month: "numeric" }), wa: 0, em: 0, pay: 0 }; });
 }
 function summary(){
-  const a = periodStart(SP), prevA = periodStart(SP, 1), S = stats(a), P = stats(prevA, a);
+  RG = range();
+  const a = RG.a, S = stats(a, RG.b), P = stats(RG.pa, RG.pb);
   const B = buckets(), hr = iso => Number(new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Jerusalem", hour: "numeric", hourCycle: "h23" }));
-  const put = (iso, k, v = 1) => { const b = SP === "1" ? B.find(x => x.h === Math.min(21, Math.max(8, hr(iso)))) : B.find(x => x.k === dayKey(iso)); if (b) b[k] += v; };
+  const put = (iso, k, v = 1) => { const b = RG.hourly ? B.find(x => x.h === Math.min(21, Math.max(8, hr(iso)))) : B.find(x => x.k === dayKey(iso)); if (b) b[k] += v; };
   S.wa.forEach(e => put(e.at, "wa")); S.ss.forEach(s => put(s.at, "em")); S.pays.forEach(p => put(p.paid_at, "pay", p.amount - (p.refunded || 0)));
   // what was done, per flow
   const waMoves = ["נשלחה הודעה", "בתהליך", HOLD, DONE, "נשלח מכתב התראה", "סגור"].map(s => [s, S.wa.filter(e => e.status === s).length]);
@@ -2079,10 +2111,11 @@ function summary(){
     ...S.ss.map(s => ({ at: s.at, ic: "📧", who: s.phone, what: `שלב ${s.stage} · ${CMS_T.NAMES[s.stage]} נשלח (${s.ch.map(m => m.channel === "email" ? "מייל" : "SMS").join(" + ")})${s.ch.some(m => m.status === "failed" && msgBad(m, s.ch)) ? " · ⚠ נכשל" : s.ch.some(m => m.status === "failed") ? " · SMS לא נמסר" : ""}${s.ch.some(m => m.status === "bounced") ? " · ↩ המייל חזר" : ""}`, f: "em" })),
     ...S.pays.map(p => ({ at: p.paid_at, ic: "💰", who: p.phone, what: `שולם ${ils(p.amount)} ב-Stripe`, f: "pay" })),
   ].sort((x, y) => y.at.localeCompare(x.at));
-  const lbl = { "1": "היום", "7": "7 הימים האחרונים", "30": "30 הימים האחרונים" }[SP];
+  const lbl = RG.lbl, tIn = ymdIn(ilToday());
   $("#vSum").innerHTML = `
-    <div class="sumh"><h2>סיכום · ${lbl}</h2><span class="mute">${a.toLocaleDateString("he-IL")}${SP === "1" ? "" : " – " + new Date().toLocaleDateString("he-IL")}</span><span class="sp"></span>
-      <div class="seg" id="sp">${[["1", "היום"], ["7", "שבוע"], ["30", "חודש"]].map(([k, t]) => `<button data-sp="${k}" class="${k === SP ? "on" : ""}">${t}</button>`).join("")}</div></div>
+    <div class="sumh"><h2>סיכום · ${esc(lbl)}</h2><span class="mute">${SP === "d" || (SP === "c" && RG.hourly) ? a.toLocaleDateString("he-IL", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" }) : SP === "c" ? `${B.length} ימים` : a.toLocaleDateString("he-IL") + " – " + ilToday().toLocaleDateString("he-IL")}</span><span class="sp"></span>
+      <div class="seg" id="sp">${[["d", "היום"], ["w", "השבוע"], ["m", "החודש"], ["c", "📅 טווח תאריכים"]].map(([k, t]) => `<button data-sp="${k}" class="${k === SP ? "on" : ""}">${t}</button>`).join("")}</div>
+      ${SP === "c" ? `<div class="drng"><label>מ-<input type="date" id="sf" value="${SF}" max="${tIn}"></label><label>עד<input type="date" id="st" value="${ST}" max="${tIn}"></label></div>` : ""}</div>
     <div class="kpis sk">
       <div class="kpi main"><b>${ils(S.collected)}</b><span>נגבה (${S.pays.length} תשלומים)</span>${delta(S.collected, P.collected, true)}</div>
       <div class="kpi"><b>${ils(S.commission)}</b><span>עמלה (20%)</span>${delta(S.commission, P.commission, true)}</div>
@@ -2092,10 +2125,10 @@ function summary(){
       <div class="kpi"><b>${S.ss.length}</b><span>📧 שליחות מייל + SMS</span><small class="mute">${S.ms.length ? Math.round(S.delivered * 100 / S.ms.length) + "% נמסרו" : "&nbsp;"}${S.failed ? ` · <span class="er">${S.failed} נכשלו</span>` : ""}</small></div>
     </div>
     <div class="sg2">
-      <div class="card sc"><div class="sch"><h3>פעילות ${SP === "1" ? "לפי שעה" : "לפי יום"}</h3>
+      <div class="card sc"><div class="sch"><h3>פעילות ${RG.hourly ? "לפי שעה" : "לפי יום"}</h3>
         <span class="lg"><i style="background:${WA_C}"></i>💬 וואטסאפ</span><span class="lg"><i style="background:${EM_C}"></i>📧 מייל + SMS</span></div>
         ${barChart("cha", B, [{ k: "wa", n: "💬 וואטסאפ", c: WA_C }, { k: "em", n: "📧 מייל + SMS", c: EM_C }], v => String(Math.round(v)))}</div>
-      <div class="card sc"><div class="sch"><h3>נגבה ${SP === "1" ? "לפי שעה" : "לפי יום"}</h3></div>
+      <div class="card sc"><div class="sch"><h3>נגבה ${RG.hourly ? "לפי שעה" : "לפי יום"}</h3></div>
         ${barChart("chp", B, [{ k: "pay", n: "נגבה", c: EM_C }], v => ils(v))}</div>
     </div>
     <div class="sg2">
@@ -2116,9 +2149,15 @@ function summary(){
         </div></div>
       <div class="card sc"><div class="sch"><h3>יומן פעילות</h3><span class="mute">${feed.length} פעולות</span></div>
         <div class="feed">${feed.slice(0, 60).map(x => `<div class="fi" data-${x.f === "em" ? "em" : "wa"}="${x.who}"><span class="fic">${x.ic}</span><div><b>${esc(name(x.who))}</b> · ${esc(x.what)}</div>
-          <span class="mute">${new Date(x.at).toLocaleString("he-IL", SP === "1" ? { hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></div>`).join("") || `<p class="mute">אין פעילות בתקופה הזו.</p>`}</div></div>
+          <span class="mute">${new Date(x.at).toLocaleString("he-IL", SP === "d" ? { hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></div>`).join("") || `<p class="mute">אין פעילות בתקופה הזו.</p>`}</div></div>
     </div>`;
-  document.querySelectorAll("[data-sp]").forEach(b => b.onclick = () => { SP = b.dataset.sp; ls("sumP", SP); summary(); });
+  document.querySelectorAll("[data-sp]").forEach(b => b.onclick = () => {
+    SP = b.dataset.sp; ls("sumP", SP);
+    if (SP === "c" && !(SF && ST)) { SF = ymdIn(addD(ilToday(), -6)); ST = ymdIn(ilToday()); ls("sumF", SF); ls("sumT", ST); }   // start with the last 7 days
+    summary();
+  });
+  if ($("#sf")) { const go = () => { if (!$("#sf").value || !$("#st").value) return; SF = $("#sf").value; ST = $("#st").value; ls("sumF", SF); ls("sumT", ST); summary(); };
+    $("#sf").onchange = go; $("#st").onchange = go; }
   const toAll = phone => { document.querySelector('.tab[data-v="all"]').click(); if (phone) { if (CASES.find(c => c.phone === phone)) openCase(phone); else toast("התיק שולם ואומת, ולכן כבר לא בשולחן"); } };
   $("#goall").onclick = () => toAll(); $("#gotrack").onclick = () => document.querySelector('.tab[data-v="track"]').click();
   document.querySelectorAll("#vSum [data-wa]").forEach(b => b.onclick = () => toAll(b.dataset.wa));
