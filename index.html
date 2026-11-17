@@ -1342,7 +1342,7 @@ function kpis(){
       <div class="pbar"><i style="width:${pct}%"></i></div><small>טופלו היום: ${done} מתוך ${left + done}</small></div>` + [
     ["תיקים פתוחים", CASES.filter(c => c.status !== "סגור").length + " · " + ils(CASES.filter(c => c.status !== "סגור").reduce((s, c) => s + c.amount / 100, 0))],
     ["נגבה החודש (כל התשלומים)", ils(PAYS.filter(p => p.month === m).reduce((s, p) => s + p.amount - p.refunded, 0))],
-    ["עמלה החודש (20%)", ils(mine.reduce((s, p) => s + Number(p.commission), 0))],
+    ["עמלה החודש (20% נטו)", ils(mine.reduce((s, p) => s + Number(p.commission), 0))],
   ].map(([t, v]) => `<div class="kpi"><b>${v}</b><span>${t}</span></div>`).join("");
 }
 // 💬 WhatsApp counters, built like the 📧 / 📱 ones: the main tile is what needs a hand now, every tile is clickable
@@ -2127,7 +2127,7 @@ function summary(){
       ${SP === "c" ? `<div class="drng"><label>מ-<input type="date" id="sf" value="${SF}" max="${tIn}"></label><label>עד<input type="date" id="st" value="${ST}" max="${tIn}"></label></div>` : ""}</div>
     <div class="kpis sk">
       <div class="kpi main"><b>${ils(S.collected)}</b><span>נגבה (${S.pays.length} תשלומים)</span>${delta(S.collected, P.collected, true)}</div>
-      <div class="kpi"><b>${ils(S.commission)}</b><span>עמלה (20%)</span>${delta(S.commission, P.commission, true)}</div>
+      <div class="kpi"><b>${ils(S.commission)}</b><span>עמלה (20% נטו)</span>${delta(S.commission, P.commission, true)}</div>
       <div class="kpi"><b>${S.touched.size}</b><span>לקוחות שטופלו</span>${delta(S.touched.size, P.touched.size)}</div>
       <div class="kpi"><b>${S.incoming}</b><span>תיקים חדשים שנכנסו</span>${delta(S.incoming, P.incoming)}</div>
       <div class="kpi"><b>${S.wa.length}</b><span>💬 פעולות וואטסאפ</span>${delta(S.wa.length, P.wa.length)}</div>
@@ -2301,16 +2301,16 @@ function payroll(){
   });
   $("#vPay").innerHTML = `
     <h2>עמלות ושכר</h2>
-    <p class="mute">20% מכל תשלום שאומת ב-Stripe על תיק שעודכן לפני התשלום או עד 48 שעות אחריו. חודש נסגר לפי תאריך התשלום, ומשולם ב-10 לחודש שאחריו. תשלום שהוחזר או הוכחש מקוזז.</p>
+    <p class="mute">20% מכל תשלום שאומת ב-Stripe, מחושב על הסכום שנשאר אחרי עמלות Stripe (עמלת סליקה + המרת מטבע, כ-5.1% בפועל, לפי העמלה האמיתית של כל תשלום), על תיק שעודכן לפני התשלום או עד 48 שעות אחריו. חודש נסגר לפי תאריך התשלום, ומשולם ב-10 לחודש שאחריו. תשלום שהוחזר או הוכחש מקוזז.</p>
     <div class="tbl"><table><tr><th>חודש</th><th>כל הכסף שנכנס</th><th>תשלומים עם עמלה</th><th>נגבה נטו (עם עמלה)</th><th>עמלה</th><th>מועד תשלום</th><th>סטטוס</th><th></th></tr>
     ${rows.map(r => `<tr><td>${r.m}</td><td>${ils(r.allc)} <span class="mute">· ${r.alln}</span></td><td>${r.n}</td><td>${ils(r.col)}</td><td><b>${ils(r.com)}</b></td><td>${dmy(r.pay)}</td>
       <td>${r.po ? `<span class="chip ok">שולם ${dmy(new Date(r.po.paid_at))}${r.po.ref ? " · " + esc(r.po.ref) : ""}</span>` : r.m === cur ? `<span class="chip">חודש פתוח</span>` : `<span class="chip warn">ממתין לתשלום</span>`}</td>
       <td><button class="btn" data-csv="${r.m}">פירוט CSV</button>${boss() && !r.po && r.m !== cur ? ` <button class="btn g" data-pay="${r.m}">סמן כשולם</button>` : ""}</td></tr>`).join("")}
     </table></div>
     <h3>תשלומים אחרונים</h3>
-    <div class="tbl"><table><tr><th>תאריך</th><th>לקוח</th><th>סכום</th><th>הוחזר</th><th>עמלה</th><th>חודש</th></tr>
+    <div class="tbl"><table><tr><th>תאריך</th><th>לקוח</th><th>סכום</th><th>הוחזר</th><th>עמלת Stripe</th><th>עמלה</th><th>חודש</th></tr>
     ${PAYS.slice(0, 80).map(p => { const c = ALLCASES.find(x => x.phone === p.phone) || {}; return `<tr><td>${dmy(new Date(p.paid_at))}</td><td>${esc(c.name || local(p.phone))}</td>
-      <td>${ils(p.amount)}</td><td>${p.refunded ? ils(p.refunded) : ""}</td><td>${p.commissionable ? ils(p.commission) : `<span class="mute">ללא עמלה</span>`}</td><td>${p.month}</td></tr>`; }).join("")}</table></div>`;
+      <td>${ils(p.amount)}</td><td>${p.refunded ? ils(p.refunded) : ""}</td><td>${p.fee ? ils(p.fee) : ""}</td><td>${p.commissionable ? ils(p.commission) : `<span class="mute">ללא עמלה</span>`}</td><td>${p.month}</td></tr>`; }).join("")}</table></div>`;
   document.querySelectorAll("[data-csv]").forEach(b => b.onclick = () => csv(b.dataset.csv));
   document.querySelectorAll("[data-pay]").forEach(b => b.onclick = async () => {
     const ref = prompt("אסמכתא / מספר העברה (לא חובה)") ?? "";
@@ -2318,13 +2318,15 @@ function payroll(){
     if (error) return toast(error.message); toast("סומן כשולם"); await load();
   });
 }
+// commission base: what is left of the payment after refunds and Stripe fees (a clawback row has amount 0 -> negative refund)
+const netBase = p => p.amount > 0 ? (p.amount - p.refunded) * (1 - Number(p.fee || 0) / p.amount) : -Number(p.refunded || 0);
 function csv(m){
   const ps = PAYS.filter(p => p.month === m && p.commissionable);
-  const lines = [["תאריך","לקוח","טלפון","סכום","הוחזר","נטו","עמלה","מזהה Stripe"]].concat(ps.map(p => {
+  const lines = [["תאריך","לקוח","טלפון","סכום","הוחזר","עמלת Stripe","נטו לעמלה","עמלה","מזהה Stripe"]].concat(ps.map(p => {
     const c = ALLCASES.find(x => x.phone === p.phone) || {};
-    return [dmy(new Date(p.paid_at)), c.name || "", local(p.phone), p.amount, p.refunded, p.amount - p.refunded, p.commission, p.id];
+    return [dmy(new Date(p.paid_at)), c.name || "", local(p.phone), p.amount, p.refunded, Number(p.fee || 0), +netBase(p).toFixed(2), p.commission, p.id];
   }));
-  lines.push(["סה\"כ","","","","", ps.reduce((s, p) => s + p.amount - p.refunded, 0), ps.reduce((s, p) => s + Number(p.commission), 0), ""]);
+  lines.push(["סה\"כ","","","","", ps.reduce((s, p) => s + Number(p.fee || 0), 0), +ps.reduce((s, p) => s + netBase(p), 0).toFixed(2), ps.reduce((s, p) => s + Number(p.commission), 0), ""]);
   const blob = new Blob(["﻿" + lines.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n")], {type: "text/csv"});
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `עמלות גבייה ${m}.csv`; a.click();
 }
