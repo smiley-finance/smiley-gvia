@@ -86,7 +86,7 @@
   }
 
   // FAQ of the EMAIL (formal wording, user-approved 17.11.2026; WhatsApp/SMS keep their own texts).
-  // The discount / installments question was removed on the user's request.
+  // The discount / installments and the objection (השגה) questions were removed on the user's request.
   const hasShip = c => (c.orders || []).some(o => (o.shipments || []).length);
   function shipHtml(c) {
     const r = (k, v) => `<tr><td style="${F}padding:4px 0;font-size:13px;color:#6b7085;width:110px;vertical-align:top">${k}</td><td style="${F}padding:4px 0;font-size:13px;color:#1b1d2a">${v}</td></tr>`;
@@ -104,7 +104,6 @@
       ["ההזמנה לא התקבלה אצלי", hasShip(c) ? "להלן סטטוס המשלוח ופרטי המעקב:" : "פרטי ההזמנה מפורטים לעיל.", null, hasShip(c),
         "ביטול העסקה באמצעות חברת האשראי אינו הדרך לבירור בעיה במשלוח. ככל שקיימת בעיה במשלוח, נבקש להשיב להודעה זו, והנושא ייבדק."],
       ["כבר ביצעתי את התשלום", "עד למועד שליחת הודעה זו לא התקבל תשלום באמצעות הקישור האישי. אם התשלום בוצע בדרך אחרת, נבקש להשיב להודעה זו ולצרף את אישור התשלום. עד לאימות התשלום, התיק יישאר פתוח."],
-      ["יש לי השגה לגבי החיוב", "ניתן להשיב להודעה זו ולפרט את ההשגה. הפנייה תיבחן, ונחזור אליך בהקדם."],
     ];
     if (c.kind === "sub") list.splice(2, 0, ["לא ידעתי שמדובר במנוי",
       "ההצטרפות למנוי הוצגה באתר בארבעה מקומות: בדף המוצר, בעגלת הקניות, בסיכום ההזמנה ומעל כפתור התשלום, לצד נוסח הסכמה מפורש לחיוב חוזר. באותו שלב ניתן היה לבחור ברכישה חד־פעמית. המשלוחים נשלחו אליך, והחוב מתייחס אליהם בלבד. ביטול המנוי מונע חיובים עתידיים בלבד, ואינו מבטל את התשלום בגין משלוחים שכבר סופקו. המנוי הופסק, ולא יבוצעו חיובים נוספים.",
