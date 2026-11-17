@@ -117,7 +117,8 @@
         cms_events.push({ phone, status: "נשלחה הודעה", at: ago(start - 3, 5), note: "📧💬 שלב 2 נשלח (מייל + SMS)" }); }
     }
     if (viaWa) events.push({ phone, status: "שולם – אומת", at: ago(paidDay, 1), note: "Stripe" });
-    payments.push({ id: "pi_mock_" + i, phone, amount, refunded: 0, commission: +(amount * 0.2).toFixed(2), commissionable: true, month: ym(ago(paidDay, 1)), paid_at: ago(paidDay, 1) });
+    const fee = +(amount * 0.049 + 0.87).toFixed(2);
+    payments.push({ id: "pi_mock_" + i, phone, amount, refunded: 0, fee, rate: 0.2, commission: +((amount - fee) * 0.2).toFixed(2), commissionable: true, month: ym(ago(paidDay, 1)), paid_at: ago(paidDay, 1) });
   });
   root.MOCK = { cases, messages, events, cms_events, payments, payouts: [], admins: [] };
 })(window);
