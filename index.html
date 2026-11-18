@@ -902,6 +902,34 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,
 .ib1{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.ib1 select{font:inherit;font-size:13px;padding:3px 6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:inherit}
 .ib-txt{white-space:pre-wrap;margin:10px 0;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--line) 35%,transparent);font-size:14px;max-height:180px;overflow:auto}
 .ib-sug{margin:6px 0 10px}.ib.done{opacity:.6}.ib-k{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+/* 📥 page, organised (18.11.2026): summary + filters on top, one line per customer, details on the side */
+.ibtop .ibt{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}.ibtop h2{margin:0}
+.ibst{display:flex;flex-wrap:wrap;gap:6px}.ibst span{background:color-mix(in srgb,var(--line) 40%,transparent);border-radius:99px;padding:3px 10px;font-size:13px}.ibst b{font-size:15px}
+.ibf{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}.ibf .fsw{margin:0}
+#ibq{flex:1;min-width:200px;font:inherit;font-size:14px;padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:inherit}
+.ibk{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.kf{font:inherit;font-size:13px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:inherit;cursor:pointer}
+.kf.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.ibx{display:grid;grid-template-columns:minmax(280px,380px) 1fr;gap:12px;align-items:start}
+.ibl{display:flex;flex-direction:column;gap:6px;max-height:calc(100vh - 250px);overflow:auto;padding-inline-end:2px}
+.ibr{display:flex;flex-direction:column;gap:4px;text-align:start;font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-inline-start:4px solid var(--bad);border-radius:12px;padding:9px 12px;cursor:pointer}
+.ibr:hover{box-shadow:0 3px 10px rgba(20,22,40,.08)}.ibr.on{outline:2px solid var(--acc);background:var(--accbg)}
+.ibr.done{border-inline-start-color:#86efac;opacity:.75}
+.ibr .r1,.ibr .r2{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ibr .r1 .mute{font-size:12px}.ibr .r2 .mute{font-size:12px}
+.ibr .r3{font-size:13px;color:var(--mute,#667);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ibr .nn{background:var(--ink);color:#fff;border-radius:99px;font-size:11px;padding:0 6px;line-height:17px}
+.kd{font-size:11.5px;font-weight:700;border-radius:99px;padding:1px 8px;background:color-mix(in srgb,var(--line) 60%,transparent)}
+.kd-legal{background:var(--badbg);color:var(--bad)}.kd-paid,.kd-ok{background:var(--okbg);color:#15803d}.kd-pay{background:var(--accbg);color:var(--acc)}
+.kd-stop{background:#ede9fe;color:#6d28d9}
+.ibp{position:sticky;top:10px}.ibd h2{margin:0}.ibd h3{margin:16px 0 6px}
+.ibh{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:8px}.ibback{display:none}
+.ibs pre{white-space:pre-wrap;margin:6px 0 8px;padding:10px 12px;border-radius:10px;background:var(--accbg);font:inherit;font-size:14px}
+.ibm{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:8px}.ibm.done{opacity:.6}.ibm .ib-txt{margin:8px 0 2px}
+.ibe{min-height:200px;display:grid;place-content:center;text-align:center}
+.mstop{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0;padding:8px 12px;border-radius:12px;border:1px dashed var(--line);font-size:13px}
+.mstop.on{border:1px solid #c4b5fd;background:#f5f3ff}.mstop.on b{color:#6d28d9}
+.mstop .sure,[data-mstop].sure{background:var(--bad);color:#fff;border-color:var(--bad)}
+@media (max-width:900px){.ibx{grid-template-columns:1fr}.ibx.sel .ibl{display:none}.ibx:not(.sel) .ibp{display:none}.ibl{max-height:none}.ibp{position:static}.ibback{display:inline-flex}}
 .tab .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-inline-start:4px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center}
 .nextc.auto{background:linear-gradient(135deg,var(--accbg),#fff);border-color:#c7d2fe}
 .tc.fin{border-inline-start-color:#86efac}
@@ -1587,37 +1615,125 @@ const RK = {
 };
 const GMSG = id => `https://mail.google.com/mail/?authuser=collections@try-smiley.com#search/${encodeURIComponent("rfc822msgid:" + String(id || "").replace(/[<>]/g, ""))}`;
 function inboxCount(){
-  const n = REPLIES.filter(r => !r.handled_at).length, b = $("#inbN"); if (!b) return;
+  const n = new Set(REPLIES.filter(r => !r.handled_at).map(r => r.phone || "e:" + (r.from_email || r.id))).size, b = $("#inbN"); if (!b) return;   // customers waiting, same as the page
   b.textContent = n; b.classList.toggle("hide", !n);
 }
+// 🔕 stop future messages for one customer (18.11.2026, GUI only): puts the 📧 email and 📱 SMS flows on "בבדיקה/המתנה",
+// the status the timer already skips (send.js: waiting). No new server code. A flow that is already "סגור" stays closed.
+// "🔔 החזר" puts each paused flow back on the status it had before the stop (from its history).
+const MSTOP_NOTE = "🔕 הודעות עתידיות הופסקו ידנית";
+const MSTOP_DEAD = s => s === "סגור";
+const isStopped = c => !!c && ["email", "sms"].every(f => flowSt(c, f) === HOLD || MSTOP_DEAD(flowSt(c, f))) && ["email", "sms"].some(f => flowSt(c, f) === HOLD);
+function stopBox(c){
+  if (!c) return "";
+  return isStopped(c)
+    ? `<div class="mstop on"><b>🔕 הודעות עתידיות כבויות</b><span class="mute">הטיימר לא ישלח ללקוח הזה מייל או SMS.</span><span class="sp"></span><button class="btn sm" data-mstop="${c.phone}" data-on="0">🔔 החזר הודעות</button></div>`
+    : `<div class="mstop"><span class="mute">הודעות אוטומטיות (מייל + SMS) פעילות ללקוח הזה.</span><span class="sp"></span><button class="btn sm" data-mstop="${c.phone}" data-on="1">🔕 עצור הודעות עתידיות</button></div>`;
+}
+function stopBack(c, f){                                          // the status the flow had before it was put on hold
+  const ev = CEV.filter(e => e.phone === c.phone && evIn(e, f)).sort((a, b) => b.at.localeCompare(a.at));
+  const i = ev.findIndex(e => e.status === HOLD), prev = ev.slice(i + 1).find(e => e.status !== HOLD);
+  if (prev && !MSTOP_DEAD(prev.status)) return prev.status;
+  return MSGS.some(m => m.phone === c.phone && m.channel === f && m.status !== "failed") ? "נשלחה הודעה" : "חדש";
+}
+async function setStop(phone, on){
+  const c = ALLCASES.find(x => x.phone === phone); if (!c) return;
+  const jobs = ["email", "sms"].map(f => [f, flowSt(c, f)]).filter(([f, s]) => on ? s !== HOLD && !MSTOP_DEAD(s) : s === HOLD)
+    .map(([f]) => [f, on ? HOLD : stopBack(c, f)]);
+  if (!jobs.length) return toast(on ? "אין מה לעצור: הזרימות כבר סגורות או מושהות" : "אין מה להחזיר");
+  const before = { email_status: c.email_status, sms_status: c.sms_status };
+  for (const [f, val] of jobs) {
+    const { error } = await SB.rpc(f === "email" ? "cms_set_status" : "cms_set_sms_status", { p_phone: phone, p_status: val, p_note: on ? MSTOP_NOTE : "🔔 הודעות הוחזרו ידנית" });
+    if (error) { toast("לא נשמר: " + error.message); load(true); return; }
+    c[f + "_status"] = val; CEV.push({ phone, status: val, note: on ? MSTOP_NOTE : "🔔 הודעות הוחזרו ידנית", at: new Date().toISOString(), flow: f });
+  }
+  rerenderOpen();
+  toast(on ? "🔕 הודעות עתידיות כבויות ללקוח" : "🔔 ההודעות הוחזרו", on ? () => setStop(phone, false) : null);
+  load(true);
+}
+function rerenderOpen(){
+  if (VIEW === "inbox") inbox();
+  if (EP && !$("#ep").classList.contains("hide")) openEmail(EP, EF);
+  if (SEL && VIEW !== "inbox" && typeof openCase === "function" && CASES.some(x => x.phone === SEL)) openCase(SEL, true);
+}
+document.addEventListener("click", e => {                          // one handler for every 🔕 button (inbox, case panel, email panel)
+  const b = e.target.closest("[data-mstop]"); if (!b) return;
+  const on = b.dataset.on === "1";
+  if (on && !b.classList.contains("sure")) {                       // stopping asks for a second click
+    b.classList.add("sure"); const t = b.textContent; b.textContent = "ללחוץ שוב לאישור";
+    return setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = t; } }, 4000);
+  }
+  setStop(b.dataset.mstop, on);
+});
+
+// ---------- the 📥 page: one line per customer (all their replies together), filters + search on top, details on the side ----------
+let IG = null, IK = "", IQ = "";
 function inbox(){
-  const open = REPLIES.filter(r => !r.handled_at), list = IF === "open" ? open : IF === "nomatch" ? REPLIES.filter(r => !r.phone) : REPLIES;
   const caseOf = r => r.phone && ALLCASES.find(c => c.phone === r.phone);
-  const when = iso => new Date(iso).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const by = {}; open.forEach(r => by[r.kind] = (by[r.kind] || 0) + 1);
-  const card = r => { const c = caseOf(r), k = RK[r.kind] || RK.other;
+  const when = iso => { const d = new Date(iso), t = new Date();
+    return d.toDateString() === t.toDateString() ? "היום " + d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
+      : d.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); };
+  const map = new Map();
+  REPLIES.forEach(r => { const k = r.phone || "e:" + (r.from_email || r.id); if (!map.has(k)) map.set(k, []); map.get(k).push(r); });
+  const ALL = [...map].map(([k, rs]) => { rs.sort((a, b) => b.at.localeCompare(a.at));
+    const c = caseOf(rs[0]), op = rs.filter(r => !r.handled_at);
+    return { k, rs, c, op, last: rs[0], kind: (op[0] || rs[0]).kind || "other", name: c ? c.name : (rs[0].from_email || "לא שויך") }; })
+    .sort((a, b) => b.last.at.localeCompare(a.last.at));
+  const today = new Date().toDateString();
+  const n = { open: ALL.filter(g => g.op.length).length, done: ALL.filter(g => !g.op.length).length, all: ALL.length, nomatch: ALL.filter(g => !g.c).length };
+  const inF = g => IF === "open" ? g.op.length : IF === "done" ? !g.op.length : IF === "nomatch" ? !g.c : true;
+  const q = IQ.trim().toLowerCase();
+  const hit = g => !q || [g.name, g.c && local(g.c.phone), g.c && g.c.phone, g.c && g.c.email, g.last.from_email,
+    ...(g.c && g.c.orders || []).map(o => o.order), ...g.rs.map(r => r.snippet)].some(v => v && String(v).toLowerCase().includes(q));
+  const base = ALL.filter(inF).filter(hit), list = IK ? base.filter(g => g.kind === IK) : base;
+  const kc = {}; base.forEach(g => kc[g.kind] = (kc[g.kind] || 0) + 1);
+  if (IG && !ALL.some(g => g.k === IG)) IG = null;
+  const G = ALL.find(g => g.k === IG);
+  const kchip = k => `<span class="kd kd-${k}">${esc((RK[k] || RK.other)[0])}</span>`;
+  const row = g => `<button class="ibr ${g.k === IG ? "on" : ""} ${g.op.length ? "" : "done"}" data-ig="${esc(g.k)}">
+      <span class="r1"><b>${esc(g.name)}</b>${g.rs.length > 1 ? `<span class="nn">${g.rs.length}</span>` : ""}<span class="sp"></span><span class="mute">${when(g.last.at)}</span></span>
+      <span class="r2">${kchip(g.kind)}${isStopped(g.c) ? `<span class="kd kd-stop">🔕 כבוי</span>` : ""}${g.op.length ? "" : `<span class="kd kd-ok">✓ טופל</span>`}${g.c ? `<span class="mute">${esc(g.c.total)}</span>` : ""}</span>
+      <span class="r3">${esc((g.last.snippet || "(אין טקסט)").replace(/\s+/g, " ").slice(0, 90))}</span></button>`;
+  const detail = g => { if (!g) return `<div class="card empty ibe"><div class="big">👈</div>לבחור לקוח מהרשימה כדי לראות מה כתב ומה לענות.</div>`;
+    const c = g.c, top = g.op[0] || g.last, k = RK[top.kind] || RK.other;
     const rep = c && k[1] ? emailReplies(c).find(x => x[0].startsWith(k[1])) : null;
-    const sug = !c ? `<div class="ib-sug mute">לא שויך ללקוח בוודאות (כתובת לא מוכרת או כמה לקוחות). לפתוח ב-Gmail ולבדוק ידנית.</div>`
-      : rep ? `<details class="msg ib-sug"><summary>💬 תשובה מוכנה: ${esc(rep[0])}</summary>${rep[2] ? `<img class="shot" src="${rep[2]}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${rep[2]}"><button class="btn sm" data-img="${rep[2]}">העתק תמונה</button>` : ""}<pre>${esc(rep[1])}</pre><button class="btn sm" data-copy="${esc(rep[1])}">📋 העתק תשובה</button></details>`
-      : `<div class="ib-sug mute">${r.kind === "call" ? `📞 אין תשובה מוכנה: הלקוח ביקש שיחזרו אליו. <button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>` : r.kind === "sub" ? "אין תשובת מנוי בתיק הזה (לא תיק מנוי). לבדיקה ידנית." : "אין תשובה מוכנה לסוג הזה. לקרוא ולהחליט, או לבחור סוג אחר למעלה."}</div>`;
-    return `<div class="card ib ${r.handled_at ? "done" : ""}">
-      <div class="ib1"><b>${c ? esc(c.name) : "לא שויך"}</b>${c ? `<span class="mute">${esc(c.total)}${c.kind === "sub" ? " · מנוי" : ""}</span>` : ""}
-        <span class="mute">${when(r.at)}</span>
-        <select data-rk="${r.id}" title="סוג הפנייה (אפשר לשנות)">${Object.entries(RK).map(([v, x]) => `<option value="${v}" ${v === r.kind ? "selected" : ""}>${x[0]}</option>`).join("")}</select>
-        ${r.handled_at ? `<span class="chip ok">✓ טופל${r.handled_by ? " · " + esc(r.handled_by) : ""}</span>` : ""}</div>
-      <div class="ib-txt">${esc(r.snippet || "(אין טקסט, אולי רק תמונה או קובץ מצורף)")}</div>
-      ${sug}
-      <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(r.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>
-        <button class="btn sm ${r.handled_at ? "" : "p"}" data-ibh="${r.id}" data-to="${r.handled_at ? "0" : "1"}">${r.handled_at ? "↩ החזר ללא טופל" : "✓ טופל"}</button></div></div>`; };
-  $("#vInbox").innerHTML = `<div class="card">
-      <h2 style="margin:0 0 4px">📥 תשובות מלקוחות למייל</h2>
-      <div class="hint">השרת קורא כל 15 דקות את התשובות שהגיעו ל-collections@ (קריאה בלבד), מזהה את הלקוח, ממיין לפי מילים ומציע את התשובה המוכנה של יאיר. תשובה לא עוצרת את הטיימר: שלבים 2–4 ממשיכים לצאת בימים שלהם. עונים ב-Gmail ומסמנים "✓ טופל".</div>
-      <div class="fsw" style="margin-top:10px">${[["open", `לא טופלו (${open.length})`], ["all", `הכל (${REPLIES.length})`], ["nomatch", `לא שויכו (${REPLIES.filter(r => !r.phone).length})`]].map(([v, t]) => `<button class="${IF === v ? "on" : ""}" data-if="${v}">${t}</button>`).join("")}</div>
-      ${open.length ? `<div class="ib-k">${Object.entries(RK).filter(([v]) => by[v]).map(([v, x]) => `<span class="chip">${x[0]} · ${by[v]}</span>`).join("")}</div>` : ""}
+    const sug = !c ? `<div class="mute">לא שויך ללקוח בוודאות (כתובת לא מוכרת או כמה לקוחות). לפתוח ב-Gmail ולבדוק ידנית.</div>`
+      : rep ? `${rep[2] ? `<img class="shot" src="${rep[2]}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${rep[2]}"><button class="btn sm" data-img="${rep[2]}">העתק תמונה</button>` : ""}<pre>${esc(rep[1])}</pre>
+          <div class="btns" style="margin:0"><button class="btn p" data-copy="${esc(rep[1])}">📋 העתק תשובה</button><a class="btn" href="${GMSG(top.msg_id)}" target="_blank">📬 לענות ב-Gmail</a></div>`
+      : `<div class="mute">${top.kind === "call" ? `📞 אין תשובה מוכנה: הלקוח ביקש שיחזרו אליו. <button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>` : top.kind === "sub" ? "אין תשובת מנוי בתיק הזה (לא תיק מנוי). לבדיקה ידנית." : "אין תשובה מוכנה לסוג הזה. לקרוא ולהחליט, או לבחור סוג אחר בהודעה."}</div>`;
+    return `<div class="card ibd">
+      <div class="ibh"><button class="btn sm ibback" data-ig="">→ לרשימה</button>
+        <h2>${esc(g.name)}</h2>${c ? `<span class="mute">${esc(c.total)}${c.kind === "sub" ? " · מנוי" : ""} · ${(c.orders || []).map(o => esc(o.order)).join(", ")}</span>` : ""}</div>
+      <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(g.last.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>
+        ${g.op.length ? `<button class="btn sm p" data-iball="${esc(g.k)}">✓ סמן הכל כטופל (${g.op.length})</button>` : ""}</div>
+      ${stopBox(c)}
+      <h3>💬 מה לענות${g.op.length ? "" : " (כבר טופל)"}: ${esc(k[0])}</h3>
+      <div class="ibs">${sug}</div>
+      <h3>✉️ מה הלקוח כתב (${g.rs.length})</h3>
+      ${g.rs.map(r => `<div class="ibm ${r.handled_at ? "done" : ""}">
+        <div class="ib1"><span class="mute">${when(r.at)}</span>
+          <select data-rk="${r.id}" title="סוג הפנייה (אפשר לשנות)">${Object.entries(RK).map(([v, x]) => `<option value="${v}" ${v === r.kind ? "selected" : ""}>${x[0]}</option>`).join("")}</select>
+          <span class="sp"></span>${r.handled_at ? `<span class="chip ok">✓ טופל${r.handled_by ? " · " + esc(r.handled_by) : ""}</span>` : ""}
+          <button class="btn sm ${r.handled_at ? "" : "p"}" data-ibh="${r.id}" data-to="${r.handled_at ? "0" : "1"}">${r.handled_at ? "↩ לא טופל" : "✓ טופל"}</button></div>
+        <div class="ib-txt">${esc(r.snippet || "(אין טקסט, אולי רק תמונה או קובץ מצורף)")}</div></div>`).join("")}
+    </div>`; };
+  $("#vInbox").innerHTML = `<div class="card ibtop">
+      <div class="ibt"><h2>📥 תשובות מלקוחות</h2>
+        <div class="ibst"><span><b>${n.open}</b> מחכים לתשובה</span><span><b>${REPLIES.filter(r => new Date(r.at).toDateString() === today).length}</b> הודעות היום</span><span><b>${n.nomatch}</b> לא שויכו</span></div></div>
+      <div class="ibf"><div class="fsw">${[["open", "מחכים", n.open], ["done", "טופלו", n.done], ["all", "הכל", n.all], ["nomatch", "לא שויכו", n.nomatch]].map(([v, t, x]) => `<button class="${IF === v ? "on" : ""}" data-if="${v}">${t} (${x})</button>`).join("")}</div>
+        <input id="ibq" type="search" placeholder="🔎 חיפוש: שם, טלפון, מייל, הזמנה או טקסט" value="${esc(IQ)}"></div>
+      <div class="ibk"><button class="kf ${IK ? "" : "on"}" data-ik="">כל הסוגים</button>${Object.entries(RK).filter(([v]) => kc[v]).map(([v, x]) => `<button class="kf ${IK === v ? "on" : ""}" data-ik="${v}">${x[0]} · ${kc[v]}</button>`).join("")}</div>
+      <div class="hint">השרת בודק כל 15 דקות. תשובה של לקוח לא עוצרת את הטיימר; כדי לעצור הודעות ללקוח: 🔕 בתוך הכרטיס שלו.</div>
     </div>
-    ${list.map(card).join("") || `<div class="card empty"><div class="big">📭</div>${IF === "open" ? "אין תשובות שמחכות לטיפול." : "אין תשובות."}</div>`}`;
+    <div class="ibx ${G ? "sel" : ""}">
+      <div class="ibl">${list.map(row).join("") || `<div class="card empty"><div class="big">📭</div>${q || IK ? "אין תוצאות לחיפוש הזה." : IF === "open" ? "אין תשובות שמחכות לטיפול." : "אין תשובות."}</div>`}</div>
+      <div class="ibp">${detail(G)}</div>
+    </div>`;
   const V = $("#vInbox");
-  V.querySelectorAll("[data-if]").forEach(b => b.onclick = () => { IF = b.dataset.if; try { localStorage.setItem("inboxF", IF); } catch (e) {} inbox(); });
+  V.querySelectorAll("[data-if]").forEach(b => b.onclick = () => { IF = b.dataset.if; IK = ""; try { localStorage.setItem("inboxF", IF); } catch (e) {} inbox(); });
+  V.querySelectorAll("[data-ik]").forEach(b => b.onclick = () => { IK = b.dataset.ik; inbox(); });
+  V.querySelectorAll("[data-ig]").forEach(b => b.onclick = () => { IG = b.dataset.ig || null; inbox(); if (IG && matchMedia("(max-width:900px)").matches) V.scrollIntoView(); });
+  const qi = $("#ibq"); qi.oninput = () => { IQ = qi.value; const at = qi.selectionStart; inbox(); const n2 = $("#ibq"); n2.focus(); n2.setSelectionRange(at, at); };
   V.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
   V.querySelectorAll("[data-img]").forEach(b => b.onclick = () => copyImg(b.dataset.img));
   V.querySelectorAll("[data-ibo]").forEach(b => b.onclick = () => openEmail(b.dataset.ibo, "email"));
@@ -1626,12 +1742,16 @@ function inbox(){
     if (error) return toast("לא נשמר: " + error.message);
     const r = REPLIES.find(x => x.id === Number(s.dataset.rk)); if (r) { r.kind = s.value; r.kind_by = "me"; } inbox();
   });
-  V.querySelectorAll("[data-ibh]").forEach(b => b.onclick = async () => {
-    const to = b.dataset.to === "1", { error } = await SB.rpc("cms_reply_set", { p_id: Number(b.dataset.ibh), p_kind: null, p_handled: to });
-    if (error) return toast("לא נשמר: " + error.message);
-    const r = REPLIES.find(x => x.id === Number(b.dataset.ibh)); if (r) { r.handled_at = to ? new Date().toISOString() : null; r.handled_by = to ? ($("#who")?.textContent || "") : null; }
+  const mark = async (ids, to) => {
+    for (const id of ids) {
+      const { error } = await SB.rpc("cms_reply_set", { p_id: id, p_kind: null, p_handled: to });
+      if (error) { toast("לא נשמר: " + error.message); break; }
+      const r = REPLIES.find(x => x.id === id); if (r) { r.handled_at = to ? new Date().toISOString() : null; r.handled_by = to ? ($("#who")?.textContent || "") : null; }
+    }
     toast(to ? "סומן כטופל" : "הוחזר לרשימה"); inboxCount(); inbox();
-  });
+  };
+  V.querySelectorAll("[data-ibh]").forEach(b => b.onclick = () => mark([Number(b.dataset.ibh)], b.dataset.to === "1"));
+  V.querySelectorAll("[data-iball]").forEach(b => b.onclick = () => { const g = ALL.find(x => x.k === b.dataset.iball); if (g) mark(g.op.map(r => r.id), true); });
 }
 const wa = (phone, text) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 // display only: which ready message matches the next step (same rule that opens it in the list of messages)
@@ -1687,6 +1807,7 @@ function openCase(phone, keepScroll){
       <h2>${esc(c.name)} ${chip(c)}</h2>
       <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${esc(c.email)}</span></div>
       <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}</div>
+      ${stopBox(ALLCASES.find(x => x.phone === phone) || c)}
       ${ships.length ? `<div class="ships">${ships.map(([o, s]) => `<div class="ship">📦 <span>${esc(o.order)} · ${esc(s.carrier)}</span><span class="tn">${esc(s.tracking)}</span><b>${esc(s.status)}</b>${s.date ? `<span class="mute">${esc(s.date)}</span>` : ""}<span class="sp"></span>
         <button class="btn sm" data-copy="${esc(s.tracking)}">📋 העתק מספר מעקב</button>${s.tracking_url ? `<a class="btn sm" href="${esc(s.tracking_url)}" target="_blank">🔎 מעקב ב-17track</a>` : ""}</div>`).join("")}</div>` : ""}
     </div>
@@ -1835,6 +1956,7 @@ function openEmail(phone, flow){
       <h2>${esc(c.name)} ${echip(st)}</h2>
       <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${c.email ? esc(c.email) : `<span class="wn">אין מייל</span>`}</span></div>
       <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.email ? `<button class="btn sm" data-copy="${esc(c.email)}">📋 העתק מייל</button>` : ""}</div>
+      ${stopBox(c)}
       ${phaseLine(t)}
       <div class="wahint">💬 וואטסאפ: <b>${esc(c.status)}</b> · ${FNM[OF]}: <b>${esc(ot.status)}</b>${ot.stage ? ` (שלב ${ot.stage})` : ""} · כל זרימה נפרדת, לא משתנה מכאן</div>
     </div>
