@@ -898,6 +898,11 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,
 .dhead .phl{margin-top:8px}.dhead .phl span{font-size:13px;padding:3px 10px}
 .tc .tn.au{color:var(--acc);font-size:12px}
 .chip.au{background:var(--accbg);color:var(--acc);font-weight:700}
+#vInbox{display:flex;flex-direction:column;gap:10px}
+.ib1{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.ib1 select{font:inherit;font-size:13px;padding:3px 6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:inherit}
+.ib-txt{white-space:pre-wrap;margin:10px 0;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--line) 35%,transparent);font-size:14px;max-height:180px;overflow:auto}
+.ib-sug{margin:6px 0 10px}.ib.done{opacity:.6}.ib-k{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tab .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-inline-start:4px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center}
 .nextc.auto{background:linear-gradient(135deg,var(--accbg),#fff);border-color:#c7d2fe}
 .tc.fin{border-inline-start-color:#86efac}
 .tc .tt b:last-child{font-weight:800}
@@ -1132,7 +1137,7 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
       <div class="ng wa"><div class="nb">
         <button class="tab" data-v="all">💬 וואטסאפ</button></div></div>
       <div class="ng em"><div class="nb">
-        <button class="tab" data-v="track">📧 מייל</button><button class="tab" data-v="sms">📱 SMS</button></div></div>
+        <button class="tab" data-v="track">📧 מייל</button><button class="tab" data-v="inbox">📥 תשובות <span class="cnt hide" id="inbN"></span></button><button class="tab" data-v="sms">📱 SMS</button></div></div>
       <div class="ng"><div class="nb">
         <button class="tab" data-v="pay">עמלות ושכר</button></div></div>
     </nav>
@@ -1162,6 +1167,7 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
     <div id="vTrack" class="hide"></div>
     <div id="vSum" class="hide"></div>
     <div id="vCust" class="hide"></div>
+    <div id="vInbox" class="hide"></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -1288,7 +1294,7 @@ function load(bg){
 }
 const MSG_COLS = "id,phone,stage,channel,to,subject,attach,parts,due,status,error,provider_id,auto,by_email,at,updated_at";
 async function load1(bg){
-  const [c, p, o, ms, ce, we, ec, sw] = await Promise.all([
+  const [c, p, o, ms, ce, we, ec, sw, rp] = await Promise.all([
     SB.from("coll_cases").select("*").eq("removed", false).order("latest", {ascending: false}),
     SB.from("coll_payments").select("*").order("paid_at", {ascending: false}),
     SB.from("coll_payouts").select("*"),
@@ -1296,14 +1302,15 @@ async function load1(bg){
     SB.from("cms_events").select("*"),
     SB.from("coll_events").select("*"),
     SB.from("cms_cases").select("*"),
-    SB.from("cms_switches").select("*")]);
+    SB.from("cms_switches").select("*"),
+    SB.from("cms_replies").select("*").order("at", {ascending: false}).limit(1000)]);
   if (c.error) { LOAD_FAIL = true; upd(); return bg ? null : toast("לא הצלחתי לרענן את התיקים, מנסה שוב בעוד רגע"); }
-  const sig = JSON.stringify([c.data, p.data, o.data, ms.data, ce.data, we.data, ec.data, sw.data]);
+  const sig = JSON.stringify([c.data, p.data, o.data, ms.data, ce.data, we.data, ec.data, sw.data, rp.data]);
   LOADED_AT = Date.now(); LOAD_FAIL = false;
   if (bg && sig === LOAD_SIG) return upd();                   // nothing new: keep the screen exactly as it is
   const first = !LOAD_SIG; LOAD_SIG = sig;
   if (!sw.error) (sw.data || []).forEach(r => { SW[r.channel] = r.is_on !== false; SW[r.channel + "_by"] = r.by_email; SW[r.channel + "_at"] = r.updated_at; });
-  MSGS = ms.data || []; CEV = ce.data || []; WAEV = we.data || [];
+  MSGS = ms.data || []; CEV = ce.data || []; WAEV = we.data || []; REPLIES = rp.error ? [] : rp.data || [];
   WA_START = {}; WAEV.forEach(e => { if (e.by_email && e.status !== "חדש" && e.status !== "היסטוריה" && !String(e.status).startsWith("שולם") && (!WA_START[e.phone] || e.at < WA_START[e.phone])) WA_START[e.phone] = e.at; });
   // the email/SMS flow keeps its own status in cms_cases (coll_cases is not changed): put it on each case
   const EC = Object.fromEntries((ec.data || []).map(r => [r.phone, r]));
@@ -1444,8 +1451,10 @@ function render(){
   if (isWa || VIEW === "pay") kpis();
   if (isWa) waLog();
   $("#vTrack").classList.toggle("hide", VIEW !== "track" && VIEW !== "sms"); $("#vSum").classList.toggle("hide", VIEW !== "sum"); $("#vCust").classList.toggle("hide", VIEW !== "cust");
-  $("#kpis").classList.toggle("hide", VIEW === "track" || VIEW === "sms" || VIEW === "sum" || VIEW === "cust");
+  $("#vInbox").classList.toggle("hide", VIEW !== "inbox"); inboxCount();
+  $("#kpis").classList.toggle("hide", VIEW === "track" || VIEW === "sms" || VIEW === "sum" || VIEW === "cust" || VIEW === "inbox");
   if (VIEW !== "all") $("#kpis").classList.remove("tk");   // these tabs have their own counters
+  if (VIEW === "inbox") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return inbox(); }
   if (VIEW === "cust") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return customers(); }
   if (VIEW === "sum") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return summary(); }
   if (VIEW === "track" || VIEW === "sms") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return tracking(); }
@@ -1560,6 +1569,70 @@ function emailReplies(c){
   return list;
 }
 const GMAIL = e => `https://mail.google.com/mail/?authuser=collections@try-smiley.com#search/${encodeURIComponent("from:" + e + " OR to:" + e)}`;
+
+// ---------- 📥 customers' email replies (18.11.2026): table cms_replies, filled by the Edge Function cms-inbox ----------
+// Every 15 min the server reads new replies in collections@ (read only), matches each to the customer, sorts it by keywords
+// (supabase/functions/_shared/inbox.js). It never changes a status or the stage timer. Here: who wrote, what, and
+// which of Yair's ready replies fits. Same labels as inbox.js KINDS (keep the two in step).
+let REPLIES = [], IF = (() => { try { return localStorage.getItem("inboxF") || "open"; } catch (e) { return "open"; } })();
+const RK = {
+  paid:    ["כבר שילמתי", "\"כבר שילמתי\""],
+  legal:   ["סירוב / איום בתביעה", "\"תתבעו אותי\" / סירוב"],
+  sub:     ["לא ידעתי שזה מנוי", "\"לא ידעתי שזה מנוי\""],
+  notrecv: ["לא קיבלתי", "\"לא קיבלתי\""],
+  pay:     ["רוצה לשלם / איך", "הסכים לשלם / שאל איך"],
+  who:     ["מי אתם? זה עוקץ?", "\"מי אתם? זה עוקץ?\""],
+  call:    ["ביקש שיחזרו אליו", null],
+  other:   ["לבדיקה ידנית", null],
+};
+const GMSG = id => `https://mail.google.com/mail/?authuser=collections@try-smiley.com#search/${encodeURIComponent("rfc822msgid:" + String(id || "").replace(/[<>]/g, ""))}`;
+function inboxCount(){
+  const n = REPLIES.filter(r => !r.handled_at).length, b = $("#inbN"); if (!b) return;
+  b.textContent = n; b.classList.toggle("hide", !n);
+}
+function inbox(){
+  const open = REPLIES.filter(r => !r.handled_at), list = IF === "open" ? open : IF === "nomatch" ? REPLIES.filter(r => !r.phone) : REPLIES;
+  const caseOf = r => r.phone && ALLCASES.find(c => c.phone === r.phone);
+  const when = iso => new Date(iso).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const by = {}; open.forEach(r => by[r.kind] = (by[r.kind] || 0) + 1);
+  const card = r => { const c = caseOf(r), k = RK[r.kind] || RK.other;
+    const rep = c && k[1] ? emailReplies(c).find(x => x[0].startsWith(k[1])) : null;
+    const sug = !c ? `<div class="ib-sug mute">לא שויך ללקוח בוודאות (כתובת לא מוכרת או כמה לקוחות). לפתוח ב-Gmail ולבדוק ידנית.</div>`
+      : rep ? `<details class="msg ib-sug"><summary>💬 תשובה מוכנה: ${esc(rep[0])}</summary>${rep[2] ? `<img class="shot" src="${rep[2]}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${rep[2]}"><button class="btn sm" data-img="${rep[2]}">העתק תמונה</button>` : ""}<pre>${esc(rep[1])}</pre><button class="btn sm" data-copy="${esc(rep[1])}">📋 העתק תשובה</button></details>`
+      : `<div class="ib-sug mute">${r.kind === "call" ? `📞 אין תשובה מוכנה: הלקוח ביקש שיחזרו אליו. <button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>` : r.kind === "sub" ? "אין תשובת מנוי בתיק הזה (לא תיק מנוי). לבדיקה ידנית." : "אין תשובה מוכנה לסוג הזה. לקרוא ולהחליט, או לבחור סוג אחר למעלה."}</div>`;
+    return `<div class="card ib ${r.handled_at ? "done" : ""}">
+      <div class="ib1"><b>${c ? esc(c.name) : "לא שויך"}</b>${c ? `<span class="mute">${esc(c.total)}${c.kind === "sub" ? " · מנוי" : ""}</span>` : ""}
+        <span class="mute">${when(r.at)}</span>
+        <select data-rk="${r.id}" title="סוג הפנייה (אפשר לשנות)">${Object.entries(RK).map(([v, x]) => `<option value="${v}" ${v === r.kind ? "selected" : ""}>${x[0]}</option>`).join("")}</select>
+        ${r.handled_at ? `<span class="chip ok">✓ טופל${r.handled_by ? " · " + esc(r.handled_by) : ""}</span>` : ""}</div>
+      <div class="ib-txt">${esc(r.snippet || "(אין טקסט, אולי רק תמונה או קובץ מצורף)")}</div>
+      ${sug}
+      <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(r.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>
+        <button class="btn sm ${r.handled_at ? "" : "p"}" data-ibh="${r.id}" data-to="${r.handled_at ? "0" : "1"}">${r.handled_at ? "↩ החזר ללא טופל" : "✓ טופל"}</button></div></div>`; };
+  $("#vInbox").innerHTML = `<div class="card">
+      <h2 style="margin:0 0 4px">📥 תשובות מלקוחות למייל</h2>
+      <div class="hint">השרת קורא כל 15 דקות את התשובות שהגיעו ל-collections@ (קריאה בלבד), מזהה את הלקוח, ממיין לפי מילים ומציע את התשובה המוכנה של יאיר. תשובה לא עוצרת את הטיימר: שלבים 2–4 ממשיכים לצאת בימים שלהם. עונים ב-Gmail ומסמנים "✓ טופל".</div>
+      <div class="fsw" style="margin-top:10px">${[["open", `לא טופלו (${open.length})`], ["all", `הכל (${REPLIES.length})`], ["nomatch", `לא שויכו (${REPLIES.filter(r => !r.phone).length})`]].map(([v, t]) => `<button class="${IF === v ? "on" : ""}" data-if="${v}">${t}</button>`).join("")}</div>
+      ${open.length ? `<div class="ib-k">${Object.entries(RK).filter(([v]) => by[v]).map(([v, x]) => `<span class="chip">${x[0]} · ${by[v]}</span>`).join("")}</div>` : ""}
+    </div>
+    ${list.map(card).join("") || `<div class="card empty"><div class="big">📭</div>${IF === "open" ? "אין תשובות שמחכות לטיפול." : "אין תשובות."}</div>`}`;
+  const V = $("#vInbox");
+  V.querySelectorAll("[data-if]").forEach(b => b.onclick = () => { IF = b.dataset.if; try { localStorage.setItem("inboxF", IF); } catch (e) {} inbox(); });
+  V.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
+  V.querySelectorAll("[data-img]").forEach(b => b.onclick = () => copyImg(b.dataset.img));
+  V.querySelectorAll("[data-ibo]").forEach(b => b.onclick = () => openEmail(b.dataset.ibo, "email"));
+  V.querySelectorAll("[data-rk]").forEach(s => s.onchange = async () => {
+    const { error } = await SB.rpc("cms_reply_set", { p_id: Number(s.dataset.rk), p_kind: s.value, p_handled: null });
+    if (error) return toast("לא נשמר: " + error.message);
+    const r = REPLIES.find(x => x.id === Number(s.dataset.rk)); if (r) { r.kind = s.value; r.kind_by = "me"; } inbox();
+  });
+  V.querySelectorAll("[data-ibh]").forEach(b => b.onclick = async () => {
+    const to = b.dataset.to === "1", { error } = await SB.rpc("cms_reply_set", { p_id: Number(b.dataset.ibh), p_kind: null, p_handled: to });
+    if (error) return toast("לא נשמר: " + error.message);
+    const r = REPLIES.find(x => x.id === Number(b.dataset.ibh)); if (r) { r.handled_at = to ? new Date().toISOString() : null; r.handled_by = to ? ($("#who")?.textContent || "") : null; }
+    toast(to ? "סומן כטופל" : "הוחזר לרשימה"); inboxCount(); inbox();
+  });
+}
 const wa = (phone, text) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 // display only: which ready message matches the next step (same rule that opens it in the list of messages)
 const stepOf = (c, todo) => !todo ? -1 : c.status === "חדש" ? 0 : todo.includes("אחרונה") ? 3 : todo.includes("מכתב") ? 2 : todo.includes("תזכורת") ? 1 : -1;

@@ -10,15 +10,32 @@
   let DB;
   try { DB = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
   if (!DB || !DB.cases) DB = clone(root.MOCK);
+  // 📥 customers' email replies (cms_replies): INVENTED examples, one per type, on the first mock customers
+  if (!DB.replies) {
+    const ago = h => new Date(Date.now() - h * 36e5).toISOString(), P = i => DB.cases[i] && DB.cases[i].phone;
+    DB.replies = [
+      ["paid", 1, "שלום, כבר שילמתי בהעברה בנקאית בשבוע שעבר. מצרף אישור.", true],
+      ["notrecv", 2, "החבילה לא הגיעה אליי בכלל, ניסיתי לברר ואף אחד לא חזר אליי.", true],
+      ["sub", 3, "הזמנתי פעם אחת בלבד, לא ידעתי שזה מנוי. למה חייבתם אותי שוב?", true],
+      ["legal", 4, "אני מעביר את זה לעורך הדין שלי. ניפגש בבית משפט.", true],
+      ["pay", 5, "בסדר, אני רוצה לשלם. איך משלמים?", true],
+      ["who", 6, "מי אתם בכלל? זה נראה כמו עוקץ.", false],
+      ["call", 7, "תתקשרו אליי בבקשה, אני רוצה לסגור את זה בטלפון.", true],
+      ["other", 8, "👍", false],
+      ["other", -1, "Hello, I think this was sent to me by mistake.", false],
+    ].map(([kind, i, snippet, paused], n) => ({ id: n + 1, msg_id: `<mock-${n + 1}@example.test>`, phone: i < 0 ? null : P(i) || null,
+      from_email: i < 0 ? "someone@example.test" : (DB.cases[i] && DB.cases[i].email) || "x@example.test", subject: "Re: חוב פתוח",
+      snippet, kind, kind_by: null, at: ago(n * 3 + 1), handled_at: n === 8 ? ago(1) : null, handled_by: n === 8 ? "agent@mock.test" : null }));
+  }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) {} };
-  const TABLES = { coll_cases: "cases", coll_events: "events", coll_payments: "payments", coll_payouts: "payouts", coll_admins: "admins", cms_messages: "messages", cms_events: "cms_events" };
+  const TABLES = { coll_cases: "cases", coll_events: "events", coll_payments: "payments", coll_payouts: "payouts", coll_admins: "admins", cms_messages: "messages", cms_events: "cms_events", cms_replies: "replies" };
   const wait = (v, ms = 120) => new Promise(r => setTimeout(() => r(v), ms));   // feels like a server
 
   // from("table").select("*").eq(k, v).order(k, { ascending }) -> await gives { data, error }
   function from(table) {
     const f = [], o = [];
     const q = {
-      select: () => q, eq: (k, v) => (f.push(r => r[k] === v), q),
+      select: () => q, eq: (k, v) => (f.push(r => r[k] === v), q), limit: () => q,
       order: (k, opt) => (o.push([k, opt && opt.ascending === false ? -1 : 1]), q),
       then: (ok, bad) => {
         const src = table === "cms_cases"     // real server: its own table. Here: read from the mock cases
@@ -167,6 +184,10 @@
       if (name === "coll_mark_payout") { DB.payouts.push({ month: args.p_month, ref: args.p_ref, paid_at: new Date().toISOString() }); save(); return wait({ error: null }); }
       if (name === "cms_set_sms_status") { const e = setEmailStatus(args.p_phone, args.p_status, args.p_note, "sms"); save(); return wait({ error: e }); }
       if (name === "cms_set_switch") return wait({ error: null });
+      if (name === "cms_reply_set") { const r = (DB.replies || []).find(x => x.id === args.p_id); if (r) {
+        if (args.p_kind) { r.kind = args.p_kind; r.kind_by = "agent@mock.test"; }
+        if (args.p_handled !== null && args.p_handled !== undefined) { r.handled_at = args.p_handled ? new Date().toISOString() : null; r.handled_by = args.p_handled ? "agent@mock.test" : null; } }
+        save(); return wait({ error: null }); }
       if (name === "cms_set_status") { const e = setEmailStatus(args.p_phone, args.p_status, args.p_note); save(); return wait({ error: e }); }
       if (name === "cms_send") return wait(cmsSend(args), 600);
       if (name === "cms_auto_run") return wait({ data: runAuto(), error: null }, 300);
