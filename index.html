@@ -244,7 +244,13 @@
   const DAY = 864e5;
 
   // Israel time parts (the server runs in UTC, the rules are Israeli)
-  function il(now) {
+  // il() and quiet() are cached per 15-minute slot (18.11.2026): the Intl calendar calls are slow, and the timer checks
+  // thousands of slots per run (it crashed on the server's CPU limit). Israel's hour, day, weekday and every send-window
+  // edge only change on a whole hour, so one answer per 15-minute slot is exact. Keeps at most a few thousand entries.
+  const memo = (fn, cache = new Map()) => d => { const k = Math.floor(+d / 9e5); let v = cache.get(k);
+    if (v === undefined) { if (cache.size > 20000) cache.clear(); v = fn(new Date(k * 9e5)); cache.set(k, v); } return v; };
+  const il = memo(ilRaw);
+  function ilRaw(now) {
     const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jerusalem", weekday: "short", hour: "numeric", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit" })
       .formatToParts(now).map(x => [x.type, x.value]));
     return { wd: p.weekday, h: Number(p.hour), day: `${p.year}-${p.month}-${p.day}` };
@@ -282,7 +288,8 @@
   }
 
   // sending window: Sunday-Thursday 08:00-20:00. Friday + Saturday + Israeli holidays: nothing goes out.
-  function quiet(now) {
+  const quiet = memo(quietRaw);
+  function quietRaw(now) {
     const { wd, h } = il(now);
     if (wd === "Fri" || wd === "Sat") return "סוף שבוע: שולחים רק בימים א׳–ה׳";
     const hol = holiday(now); if (hol) return hol;

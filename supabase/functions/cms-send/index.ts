@@ -9,7 +9,7 @@
 // Every send runs the same rules as the dashboard (send.js plan()), so the server can't be talked into skipping one.
 import { admin, agent, json, loadCase, loadLog, loadOpenCases, R, sendStage, env, testMode, sendingOn, isTestRecipient, switchesOff } from "../_shared/cms.ts";
 
-const MAX_PER_RUN = 40;                                       // stays well inside the function time limit; the rest go next run
+const MAX_PER_RUN = 20;                                       // stays well inside the function time limit; the rest go next run
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return json(req, "ok");
