@@ -4,7 +4,7 @@
 // It also plays the future Edge Function "cms-send": rpc("cms_send", { p_phone, p_stage })
 // -> checks the rules (send.js), writes the messages log + history, moves the status, then fakes delivery reports.
 (function (root) {
-  const KEY = "cms-mock-v5";
+  const KEY = "cms-mock-v6";
   const STATUSES_OK = ["חדש", "נשלחה הודעה", "בתהליך", "בוצע – ממתין לאימות", "נשלח מכתב התראה", "סגור"];   // what coll_set_status accepts today
   const clone = o => JSON.parse(JSON.stringify(o));
   let DB;
@@ -23,9 +23,11 @@
       ["call", 7, "תתקשרו אליי בבקשה, אני רוצה לסגור את זה בטלפון.", true],
       ["other", 8, "👍", false],
       ["other", -1, "Hello, I think this was sent to me by mistake.", false],
+      ["sub", 3, "עניתי לכם כבר, לא רוצה את המוצר ולא אשלם. תפסיקו לשלוח לי.", false],
+      ["legal", 4, "זו הפעם האחרונה שאני כותב. עוד מייל אחד ואני פונה לעורך דין.", false],
     ].map(([kind, i, snippet, paused], n) => ({ id: n + 1, msg_id: `<mock-${n + 1}@example.test>`, phone: i < 0 ? null : P(i) || null,
       from_email: i < 0 ? "someone@example.test" : (DB.cases[i] && DB.cases[i].email) || "x@example.test", subject: "Re: חוב פתוח",
-      snippet, kind, kind_by: null, at: ago(n * 3 + 1), handled_at: n === 8 ? ago(1) : null, handled_by: n === 8 ? "agent@mock.test" : null }));
+      snippet, kind, kind_by: null, at: ago(n > 8 ? n - 8.7 : n * 3 + 1), handled_at: n === 8 ? ago(1) : null, handled_by: n === 8 ? "agent@mock.test" : null }));
   }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) {} };
   const TABLES = { coll_cases: "cases", coll_events: "events", coll_payments: "payments", coll_payouts: "payouts", coll_admins: "admins", cms_messages: "messages", cms_events: "cms_events", cms_replies: "replies" };
