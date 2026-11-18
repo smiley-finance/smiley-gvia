@@ -1543,6 +1543,23 @@ function msgs(c){
   if (c.kind === "sub") replies.splice(2, 0, ["\"לא ידעתי שזה מנוי\" (לשלוח קודם את התמונה)", `ההצטרפות למנוי הוצגה באתר בארבעה מקומות: בדף המוצר, בעגלה, בסיכום ההזמנה ומעל כפתור התשלום, עם נוסח הסכמה מפורש לחיוב אוטומטי. ניתן היה לבחור במקום זה רכישה חד־פעמית.\nהמשלוחים יצאו אליך, והחוב הוא רק עליהם. ביטול מנוי מונע חיובים עתידיים בלבד, ואינו מבטל תשלום על משלוחים שכבר סופקו. המנוי כבר הופסק ולא יהיו חיובים נוספים.\n${link}`, CONSENT_IMG]);
   return { steps, replies };
 }
+// ---------- ready EMAIL replies (18.11.2026): Yair's WhatsApp replies above, word for word, adapted only to email ----------
+// (greeting + sign-off, "send it here" -> "reply to this email", "this phone number" -> the number itself). No new content.
+function emailReplies(c){
+  const n = c.first_name || "", ord = (c.orders_label.includes(",") ? "הזמנות " : "הזמנה ") + c.orders_label, link = c.payment_link;
+  const ship = (c.orders || []).flatMap(o => o.shipments.map(s => `הזמנה ${o.order}: ${s.carrier} ${s.tracking} · ${s.status}${s.date ? " · " + s.date : ""}\n${s.tracking_url}`)).join("\n");
+  const mail = b => `שלום ${n},\n\n${b}\n\nבברכה,\nמחלקת הכספים · Smiley`;
+  const list = [
+    ["הסכים לשלם / שאל איך", mail(`מלוא החוב (${c.total}) ניתן לתשלום בקישור האישי שלהלן, דף תשלום מאובטח של Stripe (כרטיס אשראי, ולרוב גם Apple Pay ו-Google Pay). עם התשלום יישלח אישור למייל, והתיק ייסגר.\n${link}`)],
+    ["\"מי אתם? זה עוקץ?\"", mail(`זו מחלקת הכספים של Smiley, האתר try-smiley.com. ההזמנה (${ord}) בוצעה עם מספר הטלפון ${local(c.phone)} ונשלחה לכתובת ${c.address || ""}. התשלום עליה בוטל דרך חברת האשראי. הקישור הוא דף תשלום מאובטח של Stripe בסכום החוב, ${c.total}.\n${link}`)],
+    ["\"לא קיבלתי\"", mail(`לפי התיעוד שלנו:\n${ship}\nביטול החיוב דרך חברת האשראי אינו הדרך לבירור משלוח. החוב בסך ${c.total} פתוח.\n${link}`)],
+    ["\"כבר שילמתי\"", mail(`לא התקבל תשלום בקישור האישי. אם שולם בדרך אחרת, יש להשיב למייל זה ולצרף צילום של אישור התשלום. עד אז התיק פתוח.\n${link}`)],
+    ["\"תתבעו אותי\" / סירוב", mail(`הודעתך נרשמה. החוב בסך ${c.total} פתוח, ויישלח אלייך מכתב התראה רשמי לפני נקיטת הליכים. עד אז עדיין ניתן להסדיר את החוב בקישור:\n${link}`)],
+  ];
+  if (c.kind === "sub") list.splice(2, 0, ["\"לא ידעתי שזה מנוי\" (לצרף את התמונה למייל)", mail(`ההצטרפות למנוי הוצגה באתר בארבעה מקומות: בדף המוצר, בעגלה, בסיכום ההזמנה ומעל כפתור התשלום, עם נוסח הסכמה מפורש לחיוב אוטומטי. ניתן היה לבחור במקום זה רכישה חד־פעמית.\nהמשלוחים יצאו אליך, והחוב הוא רק עליהם. ביטול מנוי מונע חיובים עתידיים בלבד, ואינו מבטל תשלום על משלוחים שכבר סופקו. המנוי כבר הופסק ולא יהיו חיובים נוספים.\n${link}`), CONSENT_IMG]);
+  return list;
+}
+const GMAIL = e => `https://mail.google.com/mail/?authuser=collections@try-smiley.com#search/${encodeURIComponent("from:" + e + " OR to:" + e)}`;
 const wa = (phone, text) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 // display only: which ready message matches the next step (same rule that opens it in the list of messages)
 const stepOf = (c, todo) => !todo ? -1 : c.status === "חדש" ? 0 : todo.includes("אחרונה") ? 3 : todo.includes("מכתב") ? 2 : todo.includes("תזכורת") ? 1 : -1;
@@ -1759,6 +1776,11 @@ function openEmail(phone, flow){
           <div class="mute">${g ? `נשלח ${hm(g[g.length - 1].at)} · ${DLV(e && e.status, e)} ${esc(MST[e.status] ? MST[e.status][0] : "")} · מועד ללקוח ${esc(g[0].due || "")}`
             : t.next === s ? (s === 1 ? "ממתין לשליחה ידנית" : t.blocked ? "⏱ " + t.blocked : "⏱ אוטומטי · " + t.sendAtText) : s > 1 ? "⏱ אוטומטי" : "עוד לא"}</div></div>
           ${g ? RSB(phone, s, F) : ""}<button class="btn sm" data-es="${s}">${g ? "תצוגה" : "תצוגה ושליחה"}</button></div>`; }).join("")}</div>
+      ${isE ? `<h3>תשובות מוכנות למייל</h3>
+      <div class="hint">כשלקוח עונה למייל: לפתוח את ההתכתבות ב-Gmail, להעתיק את התשובה המתאימה ולהדביק בתשובה. אותן תשובות של הוואטסאפ, בנוסח מייל.</div>
+      ${c.email ? `<div class="btns" style="margin:6px 0 10px"><a class="btn sm" href="${GMAIL(c.email)}" target="_blank">📬 פתח את ההתכתבות ב-Gmail</a></div>` : ""}
+      ${emailReplies(c).map(([t, b, img]) => `<details class="msg"><summary>${esc(t)}</summary>${img ? `<img class="shot" src="${img}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${img}">
+        <button class="btn sm" data-img="${img}">העתק תמונה</button>` : ""}<pre>${esc(b)}</pre><button class="btn sm" data-copy="${esc(b)}">📋 העתק תשובה</button></details>`).join("")}` : ""}
       <h3>${isE ? "מיילים שנשלחו" : "SMS שנשלחו"}</h3>
       <div class="mlog">${mine.map(m => `<div class="m"><b>${CH[m.channel]}</b> שלב ${m.stage} · ${esc(CMS_T.NAMES[m.stage])}
         <span class="mute">${hm(m.at)} · ${esc(m.channel === "sms" ? local(m.to) : m.to)}</span>
@@ -1773,6 +1795,7 @@ function openEmail(phone, flow){
   $("#ep").classList.remove("hide");
   $("#epx").onclick = closeEmail;
   $("#epb").querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
+  $("#epb").querySelectorAll("[data-img]").forEach(b => b.onclick = () => copyImg(b.dataset.img));
   $("#epb").querySelectorAll("[data-fl]").forEach(b => b.onclick = () => openEmail(phone, b.dataset.fl));
   $("#epb").querySelectorAll("[data-es]").forEach(b => b.onclick = () => openSend(phone, Number(b.dataset.es), undefined, F));
   $("#epb").querySelectorAll("[data-resend]").forEach(b => b.onclick = () => { const [p, s, ch] = b.dataset.resend.split("|"); openSend(p, Number(s), ch, ch); });
