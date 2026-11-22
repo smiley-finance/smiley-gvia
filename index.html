@@ -973,6 +973,8 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,
 .kd{font-size:11.5px;font-weight:700;border-radius:99px;padding:1px 8px;background:color-mix(in srgb,var(--line) 60%,transparent)}
 .kd-legal{background:var(--badbg);color:var(--bad)}.kd-paid,.kd-ok{background:var(--okbg);color:#15803d}.kd-pay{background:var(--accbg);color:var(--acc)}
 .kd-stop{background:#ede9fe;color:#6d28d9}
+.kd-ret{background:#fef3c7;color:#b45309}
+.ibr.ret{box-shadow:inset 3px 0 0 #f59e0b}
 .ibp{position:sticky;top:10px}.ibd h2{margin:0}.ibd h3{margin:16px 0 6px}
 .ibh{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:8px}.ibback{display:none}
 .ibs pre{white-space:pre-wrap;margin:6px 0 8px;padding:10px 12px;border-radius:10px;background:var(--accbg);font:inherit;font-size:14px}
@@ -1734,11 +1736,18 @@ function inbox(){
   REPLIES.forEach(r => { const k = r.phone || "e:" + (r.from_email || r.id); if (!map.has(k)) map.set(k, []); map.get(k).push(r); });
   const ALL = [...map].map(([k, rs]) => { rs.sort((a, b) => b.at.localeCompare(a.at));
     const c = caseOf(rs[0]), op = rs.filter(r => !r.handled_at);
-    return { k, rs, c, op, last: rs[0], kind: (op[0] || rs[0]).kind || "other", name: c ? c.name : (rs[0].from_email || "לא שויך") }; })
-    .sort((a, b) => b.last.at.localeCompare(a.last.at));
+    // answered = a reply was SENT from the dashboard (replied_at). handled-by-hand = marked ✓ without sending a reply.
+    const answeredAt = rs.reduce((m, r) => r.replied_at && r.replied_at > m ? r.replied_at : m, "");
+    const returned = !!op.length && !!answeredAt && op.some(r => r.at > answeredAt);   // customer wrote AGAIN after we answered
+    const state = op.length ? (returned ? "returned" : "open") : answeredAt ? "answered" : "handled";
+    return { k, rs, c, op, last: rs[0], answeredAt, returned, state, kind: (op[0] || rs[0]).kind || "other", name: c ? c.name : (rs[0].from_email || "לא שויך") }; })
+    .sort((a, b) => (b.returned - a.returned) || b.last.at.localeCompare(a.last.at));   // conversations that came back after an answer float to the top
   const today = new Date().toDateString();
-  const n = { open: ALL.filter(g => g.op.length).length, done: ALL.filter(g => !g.op.length).length, all: ALL.length, nomatch: ALL.filter(g => !g.c).length };
-  const inF = g => IF === "open" ? g.op.length : IF === "done" ? !g.op.length : IF === "nomatch" ? !g.c : true;
+  const n = { open: ALL.filter(g => g.op.length).length, returned: ALL.filter(g => g.returned).length,
+    answered: ALL.filter(g => g.state === "answered").length, handled: ALL.filter(g => g.state === "handled").length,
+    all: ALL.length, nomatch: ALL.filter(g => !g.c).length };
+  const inF = g => IF === "open" ? g.op.length : IF === "returned" ? g.returned : IF === "answered" ? g.state === "answered"
+    : IF === "handled" ? g.state === "handled" : IF === "done" ? !g.op.length : IF === "nomatch" ? !g.c : true;
   const q = IQ.trim().toLowerCase();
   const hit = g => !q || [g.name, g.c && local(g.c.phone), g.c && g.c.phone, g.c && g.c.email, g.last.from_email,
     ...(g.c && g.c.orders || []).map(o => o.order), ...g.rs.map(r => r.snippet)].some(v => v && String(v).toLowerCase().includes(q));
@@ -1747,9 +1756,9 @@ function inbox(){
   if (IG && !ALL.some(g => g.k === IG)) IG = null;
   const G = ALL.find(g => g.k === IG);
   const kchip = k => `<span class="kd kd-${k}">${esc((RK[k] || RK.other)[0])}</span>`;
-  const row = g => `<button class="ibr ${g.k === IG ? "on" : ""} ${g.op.length ? "" : "done"}" data-ig="${esc(g.k)}">
+  const row = g => `<button class="ibr ${g.k === IG ? "on" : ""} ${g.op.length ? (g.returned ? "ret" : "") : "done"}" data-ig="${esc(g.k)}">
       <span class="r1"><b>${esc(g.name)}</b>${g.rs.length > 1 ? `<span class="nn">${g.rs.length}</span>` : ""}<span class="sp"></span><span class="mute">${when(g.last.at)}</span></span>
-      <span class="r2">${kchip(g.kind)}${isStopped(g.c) ? `<span class="kd kd-stop">🔕 כבוי</span>` : ""}${g.op.length ? "" : `<span class="kd kd-ok">✓ טופל</span>`}${g.c ? `<span class="mute">${esc(g.c.total)}</span>` : ""}</span>
+      <span class="r2">${kchip(g.kind)}${g.returned ? `<span class="kd kd-ret">🔁 חזר אחרי תשובה</span>` : ""}${isStopped(g.c) ? `<span class="kd kd-stop">🔕 כבוי</span>` : ""}${g.state === "answered" ? `<span class="kd kd-ok">✉️ נענה</span>` : g.state === "handled" ? `<span class="kd">✓ טופל ידנית</span>` : ""}${g.c ? `<span class="mute">${esc(g.c.total)}</span>` : ""}</span>
       <span class="r3">${esc((g.last.snippet || "(אין טקסט)").replace(/\s+/g, " ").slice(0, 90))}</span></button>`;
   const detail = g => { if (!g) return `<div class="card empty ibe"><div class="big">👈</div>לבחור לקוח מהרשימה כדי לראות מה כתב ומה לענות.</div>`;
     const c = g.c, top = g.op[0] || g.last, k = RK[top.kind] || RK.other;
@@ -1769,7 +1778,7 @@ function inbox(){
       <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(g.last.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>
         ${g.op.length ? `<button class="btn sm p" data-iball="${esc(g.k)}">✓ סמן הכל כטופל (${g.op.length})</button>` : ""}</div>
       ${stopBox(c)}
-      <h3>💬 מה לענות${g.op.length ? "" : " (כבר טופל)"}: ${esc(k[0])}</h3>
+      <h3>💬 מה לענות${g.op.length ? (g.returned ? " · 🔁 חזר אחרי שנענה" : "") : g.state === "answered" ? " (כבר נענה)" : " (טופל ידנית)"}: ${esc(k[0])}</h3>
       <div class="ibs">${sug}</div>
       <h3>✉️ מה הלקוח כתב (${g.rs.length})</h3>
       ${g.rs.map(r => `<div class="ibm ${r.handled_at ? "done" : ""}">
@@ -1781,8 +1790,8 @@ function inbox(){
     </div>`; };
   $("#vInbox").innerHTML = `<div class="card ibtop">
       <div class="ibt"><h2>📥 תשובות מלקוחות</h2>
-        <div class="ibst"><span><b>${n.open}</b> מחכים לתשובה</span><span><b>${REPLIES.filter(r => new Date(r.at).toDateString() === today).length}</b> הודעות היום</span><span><b>${n.nomatch}</b> לא שויכו</span></div></div>
-      <div class="ibf"><div class="fsw">${[["open", "מחכים", n.open], ["done", "טופלו", n.done], ["all", "הכל", n.all], ["nomatch", "לא שויכו", n.nomatch]].map(([v, t, x]) => `<button class="${IF === v ? "on" : ""}" data-if="${v}">${t} (${x})</button>`).join("")}</div>
+        <div class="ibst"><span><b>${n.open}</b> מחכים לתשובה</span>${n.returned ? `<span><b>${n.returned}</b> 🔁 חזרו אחרי תשובה</span>` : ""}<span><b>${n.answered}</b> נענו</span><span><b>${REPLIES.filter(r => new Date(r.at).toDateString() === today).length}</b> הודעות היום</span><span><b>${n.nomatch}</b> לא שויכו</span></div></div>
+      <div class="ibf"><div class="fsw">${[["open", "מחכים", n.open], ["answered", "✉️ נענו", n.answered], ["handled", "✓ טופלו ידנית", n.handled], ["all", "הכל", n.all], ["nomatch", "לא שויכו", n.nomatch]].map(([v, t, x]) => `<button class="${IF === v ? "on" : ""}" data-if="${v}">${t} (${x})</button>`).join("")}</div>
         <input id="ibq" type="search" placeholder="🔎 חיפוש: שם, טלפון, מייל, הזמנה או טקסט" value="${esc(IQ)}"></div>
       <div class="ibk"><button class="kf ${IK ? "" : "on"}" data-ik="">כל הסוגים</button>${Object.entries(RK).filter(([v]) => kc[v]).map(([v, x]) => `<button class="kf ${IK === v ? "on" : ""}" data-ik="${v}">${x[0]} · ${kc[v]}</button>`).join("")}</div>
       <div class="hint">השרת בודק כל 15 דקות. תשובה של לקוח לא עוצרת את הטיימר; כדי לעצור הודעות ללקוח: 🔕 בתוך הכרטיס שלו.</div>
