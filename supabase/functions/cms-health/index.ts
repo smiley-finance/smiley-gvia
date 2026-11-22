@@ -45,6 +45,17 @@ Deno.serve(async (req) => {
     detail: !last ? "עוד לא רץ" : `ריצה אחרונה: ${t(last.at)} · נשלחו ${last.sent}${last.note ? " · " + last.note : ""}${fresh ? "" : " · ⚠ לא רץ יותר מ-20 דקות"}`,
     window: R.quiet(new Date()) || "חלון שליחה פתוח" });
 
+  // inbox reader: reads customer replies every 15 min and writes a heartbeat row each run. Red if it stops (the 22.11 stall type).
+  const { data: inb } = await sb.from("cms_runs").select("at,sent,note").eq("kind", "inbox").order("at", { ascending: false }).limit(1);
+  const li = inb && inb[0], ifresh = li && Date.now() - new Date(li.at).getTime() < 45 * 60e3;
+  systems.push({ key: "inbox", name: "קורא התשובות (cms-inbox)", state: !li ? "off" : ifresh ? "ok" : "err",
+    detail: !li ? "עוד לא רץ" : `ריצה אחרונה: ${t(li.at)}${li.note ? " · " + li.note : ""}${ifresh ? "" : " · ⚠ לא רץ יותר מ-45 דקות: תשובות לקוחות לא נכנסות"}` });
+  // bounce reader: reads returned emails every 15 min (same heartbeat).
+  const { data: bnc } = await sb.from("cms_runs").select("at,note").eq("kind", "bounce").order("at", { ascending: false }).limit(1);
+  const lb = bnc && bnc[0], bfresh = lb && Date.now() - new Date(lb.at).getTime() < 45 * 60e3;
+  systems.push({ key: "bounce", name: "קורא ההחזרות (cms-bounce)", state: !lb ? "off" : bfresh ? "ok" : "err",
+    detail: !lb ? "עוד לא רץ" : `ריצה אחרונה: ${t(lb.at)}${lb.note ? " · " + lb.note : ""}${bfresh ? "" : " · ⚠ לא רץ יותר מ-45 דקות"}` });
+
   // letters (the private engine's storage)
   const lt = await sb.storage.from("coll-letters").list("", { limit: 1 });
   systems.push({ key: "letters", name: "מכתבי התראה (Storage)", state: lt.error ? "err" : "ok", detail: lt.error ? lt.error.message : "נגיש · המכתב מצורף אוטומטית לשלב 3" });

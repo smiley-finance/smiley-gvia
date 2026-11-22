@@ -104,6 +104,7 @@ Deno.serve(async (req) => {
         note: `⚠ המייל של שלב ${r.stage} חזר (כתובת שגויה?): ${b.why.slice(0, 160)}. ה-SMS לא מושפע. לבדוק את כתובת המייל של הלקוח` });
     }
   }
-  if (marked.length && !dry) await sb.from("cms_runs").insert({ kind: "bounce", sent: 0, note: `${marked.length} מיילים חזרו` });
+  // heartbeat every run (even with no bounces), so cms-health can turn the dot red if this reader ever stops
+  if (!dry) await sb.from("cms_runs").insert({ kind: "bounce", sent: 0, note: marked.length ? `${marked.length} מיילים חזרו` : "נבדק · אין החזרות חדשות" });
   return json(req, { ok: true, dry, bounces: found.length, marked, unmatched });
 });

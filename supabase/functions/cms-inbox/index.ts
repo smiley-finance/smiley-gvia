@@ -143,7 +143,8 @@ Deno.serve(async (req) => {
   }
   const nNew = out.length;
   // the run-log shows what ACTUALLY saved (not just candidates), so a stall like the 22.11 one shows as "0" and can't hide
-  if (!dry && saved) await sb.from("cms_runs").insert({ kind: "inbox", sent: saved, note: `📥 ${saved} תשובות חדשות מלקוחות` });
+  // heartbeat every run (even with nothing new), so cms-health can turn the dot red if this reader ever stops
+  if (!dry) await sb.from("cms_runs").insert({ kind: "inbox", sent: saved, note: saved ? `📥 ${saved} תשובות חדשות מלקוחות` : "📥 נבדק · אין תשובות חדשות" });
   // counts only: no customer details in the response (it lands in net._http_response)
   const by = (k: string) => out.reduce((a: Record<string, number>, o) => { const v = String((o as Record<string, unknown>)[k]); a[v] = (a[v] || 0) + 1; return a; }, {});
   return json(req, { ok: true, dry, seen, candidates: nNew, saved, waiting_next_run: waiting, matched: out.filter(o => o.phone).length,
