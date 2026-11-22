@@ -461,6 +461,58 @@
   root.CMS_SEND = { plan, track, autoPick, smsStatus, view, quiet, holiday, nextWindow, when, validEmail, validPhone, fmt };
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
+<!-- CMS: ready email replies, copied from supabase/functions/_shared/replies.js by supabase/sync_index.py. Do not edit here. -->
+<script>
+// Smiley CMS · replies.js: THE source of the ready EMAIL replies to a customer's answer (Yair's wording, locked).
+// Used by the dashboard (emailReplies), the demo, and the server (cms-reply-send builds the text here so the
+// browser can never choose the words). After editing, run:  python supabase/sync_index.py
+// Keep the KINDS in step with _shared/inbox.js (the classifier) and RK in index.html (the labels).
+(function (root) {
+  const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
+  const local = p => p && String(p).startsWith("972") ? "0" + String(p).slice(3) : String(p || "");
+  const greet = (c, b) => `שלום ${c.first_name || ""},\n\n${b}\n\nבברכה,\nמחלקת הכספים · Smiley`;
+  const shipLines = c => (c.orders || []).flatMap(o => (o.shipments || []).map(s =>
+    `הזמנה ${o.order}: ${s.carrier} ${s.tracking} · ${s.status}${s.date ? " · " + s.date : ""}\n${s.tracking_url}`)).join("\n");
+
+  // one entry per reply-kind. body(c) = the exact text; img = an attachment URL or null; subjectOnly types (call/other) have no entry.
+  // The wording is Yair's, unchanged from the WhatsApp replies, adapted to email.
+  const BY_KIND = {
+    pay: { title: "הסכים לשלם / שאל איך", img: null, body: c =>
+      `מלוא החוב (${c.total}) ניתן לתשלום בקישור האישי שלהלן, דף תשלום מאובטח של Stripe (כרטיס אשראי, ולרוב גם Apple Pay ו-Google Pay). עם התשלום יישלח אישור למייל, והתיק ייסגר.\n${c.payment_link}` },
+    who: { title: '"מי אתם? זה עוקץ?"', img: null, body: c =>
+      `זו מחלקת הכספים של Smiley, האתר try-smiley.com. ההזמנה (${(c.orders_label || "").includes(",") ? "הזמנות " : "הזמנה "}${c.orders_label}) בוצעה עם מספר הטלפון ${local(c.phone)} ונשלחה לכתובת ${c.address || ""}. התשלום עליה בוטל דרך חברת האשראי. הקישור הוא דף תשלום מאובטח של Stripe בסכום החוב, ${c.total}.\n${c.payment_link}` },
+    notrecv: { title: '"לא קיבלתי"', img: null, body: c =>
+      `לפי התיעוד שלנו:\n${shipLines(c)}\nביטול החיוב דרך חברת האשראי אינו הדרך לבירור משלוח. החוב בסך ${c.total} פתוח.\n${c.payment_link}` },
+    sub: { title: '"לא ידעתי שזה מנוי"', img: CONSENT_IMG, subOnly: true, body: c =>
+      `ההצטרפות למנוי הוצגה באתר בארבעה מקומות: בדף המוצר, בעגלה, בסיכום ההזמנה ומעל כפתור התשלום, עם נוסח הסכמה מפורש לחיוב אוטומטי. ניתן היה לבחור במקום זה רכישה חד־פעמית.\nהמשלוחים יצאו אליך, והחוב הוא רק עליהם. ביטול מנוי מונע חיובים עתידיים בלבד, ואינו מבטל תשלום על משלוחים שכבר סופקו. המנוי כבר הופסק ולא יהיו חיובים נוספים.\n${c.payment_link}` },
+    paid: { title: '"כבר שילמתי"', img: null, body: c =>
+      `לא התקבל תשלום בקישור האישי. אם שולם בדרך אחרת, יש להשיב למייל זה ולצרף צילום של אישור התשלום. עד אז התיק פתוח.\n${c.payment_link}` },
+    legal: { title: '"תתבעו אותי" / סירוב', img: null, body: c =>
+      `הודעתך נרשמה. החוב בסך ${c.total} פתוח, ויישלח אלייך מכתב התראה רשמי לפני נקיטת הליכים. עד אז עדיין ניתן להסדיר את החוב בקישור:\n${c.payment_link}` },
+  };
+
+  // build the one ready reply for a kind -> { title, body, image } | null (null = no ready reply for this kind/case)
+  function build(c, kind) {
+    const e = BY_KIND[kind];
+    if (!e) return null;                              // call / other / unknown: no ready reply
+    if (e.subOnly && c.kind !== "sub") return null;   // the "לא ידעתי שזה מנוי" reply only fits a subscription case
+    return { title: e.title, body: greet(c, e.body(c)), image: e.img || null };
+  }
+  const hasReply = (c, kind) => !!build(c, kind);
+
+  // the full list the dashboard shows (same order as before: pay, who, notrecv, [sub], paid, legal)
+  function list(c) {
+    const order = ["pay", "who", "notrecv", "paid", "legal"];
+    const out = order.map(k => build(c, k)).filter(Boolean).map(r => [r.title, r.body, r.image]);
+    const sub = build(c, "sub");
+    if (sub) out.splice(2, 0, [sub.title + " (לצרף את התמונה למייל)", sub.body, sub.image]);
+    return out;
+  }
+
+  root.CMS_REPLIES = { build, hasReply, list, CONSENT_IMG };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+</script>
+
 <script>try { if (localStorage.getItem("theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch (e) {}</script>
 <style>
 :root{--bg:#f3f4fa;--card:#fff;--ink:#1b1d2a;--mute:#6b7085;--line:#e4e6f0;--soft:#f7f8fc;
@@ -930,6 +982,21 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,
 .mstop.on{border:1px solid #c4b5fd;background:#f5f3ff}.mstop.on b{color:#6d28d9}
 .mstop .sure,[data-mstop].sure{background:var(--bad);color:#fff;border-color:var(--bad)}
 @media (max-width:900px){.ibx{grid-template-columns:1fr}.ibx.sel .ibl{display:none}.ibx:not(.sel) .ibp{display:none}.ibl{max-height:none}.ibp{position:static}.ibback{display:inline-flex}}
+.btn.send.sure{background:var(--bad);border-color:var(--bad);color:#fff}
+/* 📋 activity log */
+.lgwrap{padding:0;overflow:hidden}
+.lghead,.lg{display:grid;grid-template-columns:76px 30px 1fr auto 150px;gap:10px;align-items:center;padding:8px 14px}
+.lghead{font-size:12px;color:var(--mute,#667);background:color-mix(in srgb,var(--line) 30%,transparent);font-weight:700;position:sticky;top:0}
+.lg{border-top:1px solid var(--line);font-size:13.5px}
+.lg:hover{background:color-mix(in srgb,var(--line) 18%,transparent)}
+.lg .lt{font-size:12px;color:var(--mute,#667);white-space:nowrap}
+.lg .lcat{font-size:15px;text-align:center}
+.lg .lw b{font-weight:600}.lg .ln{font-size:12px;color:var(--mute,#667);margin-top:2px;white-space:pre-wrap}
+.lg .lres{font-size:12px;font-weight:700;white-space:nowrap}.lg .lres.ok{color:#15803d}.lg .lres.bad{color:var(--bad)}
+.lg .lby{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lg-send{border-inline-start:3px solid #93c5fd}.lg-in{border-inline-start:3px solid #f59e0b}.lg-out{border-inline-start:3px solid #86efac}
+.lg-status{border-inline-start:3px solid #c4b5fd}.lg-set{border-inline-start:3px solid var(--mute,#99a)}
+@media (max-width:760px){.lghead{display:none}.lg{grid-template-columns:64px 24px 1fr;grid-auto-rows:auto;row-gap:2px}.lg .lres{grid-column:3;justify-self:start}.lg .lby{grid-column:3}}
 .tab .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-inline-start:4px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center}
 .nextc.auto{background:linear-gradient(135deg,var(--accbg),#fff);border-color:#c7d2fe}
 .tc.fin{border-inline-start-color:#86efac}
@@ -1167,7 +1234,7 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
       <div class="ng em"><div class="nb">
         <button class="tab" data-v="track">📧 מייל</button><button class="tab" data-v="inbox">📥 תשובות <span class="cnt hide" id="inbN"></span></button><button class="tab" data-v="sms">📱 SMS</button></div></div>
       <div class="ng"><div class="nb">
-        <button class="tab" data-v="pay">עמלות ושכר</button></div></div>
+        <button class="tab" data-v="log">📋 יומן</button><button class="tab" data-v="pay">עמלות ושכר</button></div></div>
     </nav>
     <div id="banner" class="card banner hide">מצב עובד: זה מה שהעובד רואה. שינויים שתעשה כאן נשמרים בתיקים, אבל לא נספרים לו לעמלה.</div>
     <div id="waBar" class="card swbar hide"><b>💬 וואטסאפ</b><span class="mute">שליחה ידנית מהטלפון: פותחים לקוח ← שולחים את ההודעה המוכנה ← מסמנים סטטוס</span></div>
@@ -1196,6 +1263,7 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
     <div id="vSum" class="hide"></div>
     <div id="vCust" class="hide"></div>
     <div id="vInbox" class="hide"></div>
+    <div id="vLog" class="hide"></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -1480,8 +1548,10 @@ function render(){
   if (isWa) waLog();
   $("#vTrack").classList.toggle("hide", VIEW !== "track" && VIEW !== "sms"); $("#vSum").classList.toggle("hide", VIEW !== "sum"); $("#vCust").classList.toggle("hide", VIEW !== "cust");
   $("#vInbox").classList.toggle("hide", VIEW !== "inbox"); inboxCount();
-  $("#kpis").classList.toggle("hide", VIEW === "track" || VIEW === "sms" || VIEW === "sum" || VIEW === "cust" || VIEW === "inbox");
+  $("#vLog").classList.toggle("hide", VIEW !== "log");
+  $("#kpis").classList.toggle("hide", VIEW === "track" || VIEW === "sms" || VIEW === "sum" || VIEW === "cust" || VIEW === "inbox" || VIEW === "log");
   if (VIEW !== "all") $("#kpis").classList.remove("tk");   // these tabs have their own counters
+  if (VIEW === "log") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return logView(); }
   if (VIEW === "inbox") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return inbox(); }
   if (VIEW === "cust") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return customers(); }
   if (VIEW === "sum") { $("#vCases").classList.add("hide"); $("#vPay").classList.add("hide"); document.body.classList.remove("wide"); return summary(); }
@@ -1582,20 +1652,7 @@ function msgs(c){
 }
 // ---------- ready EMAIL replies (18.11.2026): Yair's WhatsApp replies above, word for word, adapted only to email ----------
 // (greeting + sign-off, "send it here" -> "reply to this email", "this phone number" -> the number itself). No new content.
-function emailReplies(c){
-  const n = c.first_name || "", ord = (c.orders_label.includes(",") ? "הזמנות " : "הזמנה ") + c.orders_label, link = c.payment_link;
-  const ship = (c.orders || []).flatMap(o => o.shipments.map(s => `הזמנה ${o.order}: ${s.carrier} ${s.tracking} · ${s.status}${s.date ? " · " + s.date : ""}\n${s.tracking_url}`)).join("\n");
-  const mail = b => `שלום ${n},\n\n${b}\n\nבברכה,\nמחלקת הכספים · Smiley`;
-  const list = [
-    ["הסכים לשלם / שאל איך", mail(`מלוא החוב (${c.total}) ניתן לתשלום בקישור האישי שלהלן, דף תשלום מאובטח של Stripe (כרטיס אשראי, ולרוב גם Apple Pay ו-Google Pay). עם התשלום יישלח אישור למייל, והתיק ייסגר.\n${link}`)],
-    ["\"מי אתם? זה עוקץ?\"", mail(`זו מחלקת הכספים של Smiley, האתר try-smiley.com. ההזמנה (${ord}) בוצעה עם מספר הטלפון ${local(c.phone)} ונשלחה לכתובת ${c.address || ""}. התשלום עליה בוטל דרך חברת האשראי. הקישור הוא דף תשלום מאובטח של Stripe בסכום החוב, ${c.total}.\n${link}`)],
-    ["\"לא קיבלתי\"", mail(`לפי התיעוד שלנו:\n${ship}\nביטול החיוב דרך חברת האשראי אינו הדרך לבירור משלוח. החוב בסך ${c.total} פתוח.\n${link}`)],
-    ["\"כבר שילמתי\"", mail(`לא התקבל תשלום בקישור האישי. אם שולם בדרך אחרת, יש להשיב למייל זה ולצרף צילום של אישור התשלום. עד אז התיק פתוח.\n${link}`)],
-    ["\"תתבעו אותי\" / סירוב", mail(`הודעתך נרשמה. החוב בסך ${c.total} פתוח, ויישלח אלייך מכתב התראה רשמי לפני נקיטת הליכים. עד אז עדיין ניתן להסדיר את החוב בקישור:\n${link}`)],
-  ];
-  if (c.kind === "sub") list.splice(2, 0, ["\"לא ידעתי שזה מנוי\" (לצרף את התמונה למייל)", mail(`ההצטרפות למנוי הוצגה באתר בארבעה מקומות: בדף המוצר, בעגלה, בסיכום ההזמנה ומעל כפתור התשלום, עם נוסח הסכמה מפורש לחיוב אוטומטי. ניתן היה לבחור במקום זה רכישה חד־פעמית.\nהמשלוחים יצאו אליך, והחוב הוא רק עליהם. ביטול מנוי מונע חיובים עתידיים בלבד, ואינו מבטל תשלום על משלוחים שכבר סופקו. המנוי כבר הופסק ולא יהיו חיובים נוספים.\n${link}`), CONSENT_IMG]);
-  return list;
-}
+function emailReplies(c){ return CMS_REPLIES.list(c); }
 const GMAIL = e => `https://mail.google.com/mail/?authuser=collections@try-smiley.com#search/${encodeURIComponent("from:" + e + " OR to:" + e)}`;
 
 // ---------- 📥 customers' email replies (18.11.2026): table cms_replies, filled by the Edge Function cms-inbox ----------
@@ -1699,7 +1756,12 @@ function inbox(){
     const rep = c && k[1] ? emailReplies(c).find(x => x[0].startsWith(k[1])) : null;
     const sug = !c ? `<div class="mute">לא שויך ללקוח בוודאות (כתובת לא מוכרת או כמה לקוחות). לפתוח ב-Gmail ולבדוק ידנית.</div>`
       : rep ? `${rep[2] ? `<img class="shot" src="${rep[2]}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${rep[2]}"><button class="btn sm" data-img="${rep[2]}">העתק תמונה</button>` : ""}<pre>${esc(rep[1])}</pre>
-          <div class="btns" style="margin:0"><button class="btn p" data-copy="${esc(rep[1])}">📋 העתק תשובה</button><a class="btn" href="${GMSG(top.msg_id)}" target="_blank">📬 לענות ב-Gmail</a></div>`
+          <div class="btns" style="margin:0">
+            ${top.replied_at ? `<span class="chip ok">✉️ נשלחה תשובה${top.replied_by ? " · " + esc(top.replied_by) : ""} · ${when(top.replied_at)}</span>`
+              : SW.email ? `<button class="btn send" data-send="${top.id}">✉️ שלח תשובה במייל</button>`
+              : `<span class="chip">📧 המייל כבוי במתג — לא ניתן לשלוח מכאן</span>`}
+            <button class="btn p" data-copy="${esc(rep[1])}">📋 העתק תשובה</button><a class="btn" href="${GMSG(top.msg_id)}" target="_blank">📬 ב-Gmail</a></div>
+          <div class="hint">שליחה יוצאת מ-collections@ לתוך אותה שיחה במייל (לא מייל חדש)${rep[2] ? ", עם התמונה המצורפת" : ""}. התשובה נעולה לנוסח של יאיר. לא משנה סטטוס או טיימר.</div>`
       : `<div class="mute">${top.kind === "call" ? `📞 אין תשובה מוכנה: הלקוח ביקש שיחזרו אליו. <button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>` : top.kind === "sub" ? "אין תשובת מנוי בתיק הזה (לא תיק מנוי). לבדיקה ידנית." : "אין תשובה מוכנה לסוג הזה. לקרוא ולהחליט, או לבחור סוג אחר בהודעה."}</div>`;
     return `<div class="card ibd">
       <div class="ibh"><button class="btn sm ibback" data-ig="">→ לרשימה</button>
@@ -1752,6 +1814,74 @@ function inbox(){
   };
   V.querySelectorAll("[data-ibh]").forEach(b => b.onclick = () => mark([Number(b.dataset.ibh)], b.dataset.to === "1"));
   V.querySelectorAll("[data-iball]").forEach(b => b.onclick = () => { const g = ALL.find(x => x.k === b.dataset.iball); if (g) mark(g.op.map(r => r.id), true); });
+  V.querySelectorAll("[data-send]").forEach(b => b.onclick = () => {                 // send a locked reply, in-thread; two clicks
+    if (!b.classList.contains("sure")) { b.dataset.t = b.textContent; b.classList.add("sure"); b.textContent = "⚠️ ללחוץ שוב לשליחה ללקוח";
+      return setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = b.dataset.t; } }, 4000); }
+    b.disabled = true; b.textContent = "שולח…"; replySendDo(Number(b.dataset.send));
+  });
+}
+// send the ready reply back to the customer, threaded into the same Gmail conversation (Edge Function cms-reply-send).
+// Never changes a status or the timer; it only records that the reply was sent and marks it handled.
+async function replySendDo(id){
+  const r = REPLIES.find(x => x.id === id);
+  const { data, error } = await SB.functions.invoke("cms-reply-send", { body: { reply_id: id } });
+  if (error || (data && data.ok === false)) { toast("לא נשלח: " + ((data && data.error) || (error && error.message) || "שגיאה")); inbox(); return; }
+  const now = new Date().toISOString();
+  if (r) { r.replied_at = now; r.replied_by = ($("#who")?.textContent || ""); r.handled_at = r.handled_at || now; r.handled_by = r.handled_by || r.replied_by; }
+  toast("✉️ התשובה נשלחה ללקוח, באותה שיחה"); inboxCount(); inbox();
+}
+// ---------- 📋 activity log (22.11.2026): one time-ordered feed of everything that happens in the dashboard ----------
+// Read-only. Pulls together: emails/SMS sent, replies in & out, status/case changes, and settings/switch changes.
+// Nothing here changes any data.
+let LF = (() => { try { return localStorage.getItem("logRange") || "today"; } catch (e) { return "today"; } })(), LQ = "", LC = "", LRUNS = null, LRUNS_AT = 0;
+const LOGCAT = { send: "📤 נשלח", in: "📥 תשובות", out: "✉️ תשובות שנשלחו", status: "🔄 סטטוס", set: "⚙️ הגדרות" };
+const CHN = { email: "📧 מייל", sms: "📱 SMS", whatsapp: "💬 וואטסאפ" };
+const DLVL = { delivered: ["נמסר", "ok"], sent: ["נשלח", "ok"], queued: ["בתור", ""], bounced: ["חזר", "bad"], failed: ["נכשל", "bad"] };
+async function loadRuns(force){
+  if (LRUNS && !force && Date.now() - LRUNS_AT < 60e3) return LRUNS;
+  const { data, error } = await SB.from("cms_runs").select("*").eq("kind", "switch").order("at", { ascending: false }).limit(300);
+  LRUNS = error ? [] : (data || []); LRUNS_AT = Date.now(); return LRUNS;
+}
+function logEvents(){
+  const nameOf = p => { const c = ALLCASES.find(x => x.phone === p); return c ? c.name : (p ? local(p) : "—"); };
+  const ev = [];
+  MSGS.forEach(m => { const d = DLVL[m.status] || [m.status || "", ""];
+    ev.push({ at: m.at, cat: "send", who: m.by_email || "מערכת · טיימר", icon: CHN[m.channel] || m.channel, what: `שלב ${m.stage} · ${(CMS_T.NAMES && CMS_T.NAMES[m.stage]) || ""}`, whom: nameOf(m.phone), res: d[0], tone: d[1] }); });
+  REPLIES.forEach(r => { const label = (RK[r.kind] || RK.other)[0];
+    ev.push({ at: r.at, cat: "in", who: "לקוח", icon: "📥", what: "תשובת לקוח התקבלה", whom: nameOf(r.phone) || r.from_email, res: label, tone: "" });
+    if (r.replied_at) ev.push({ at: r.replied_at, cat: "out", who: r.replied_by || "", icon: "✉️", what: `תשובה נשלחה ללקוח · ${label}`, whom: nameOf(r.phone), res: "נשלח", tone: "ok" }); });
+  CEV.forEach(e => ev.push({ at: e.at, cat: (e.note && /הודעות עתידיות|הוחזרו/.test(e.note)) ? "set" : "status", who: e.by_email || "מערכת", icon: e.flow === "sms" ? "📱" : "📧", what: `סטטוס ${e.flow === "sms" ? "SMS" : "מייל"}: ${e.status}`, whom: nameOf(e.phone), res: "", note: e.note, tone: "" }));
+  (LRUNS || []).forEach(r => ev.push({ at: r.at, cat: "set", who: r.by_email || "", icon: "⚙️", what: "מתג ראשי", whom: "", res: r.note || "", tone: "" }));
+  return ev.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+async function logView(){
+  await loadRuns();
+  const V = $("#vLog"); if (VIEW !== "log") return;
+  const now = Date.now(), from = LF === "today" ? new Date().setHours(0, 0, 0, 0) : LF === "7d" ? now - 7 * 864e5 : 0;
+  const q = LQ.trim().toLowerCase();
+  let ev = logEvents().filter(e => +new Date(e.at) >= from);
+  const counts = {}; ev.forEach(e => counts[e.cat] = (counts[e.cat] || 0) + 1);
+  if (LC) ev = ev.filter(e => e.cat === LC);
+  if (q) ev = ev.filter(e => [e.who, e.what, e.whom, e.res, e.note].some(v => v && String(v).toLowerCase().includes(q)));
+  const when = iso => { const d = new Date(iso), t = new Date();
+    return (d.toDateString() === t.toDateString() ? "" : d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" }) + " ") + d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }); };
+  const line = e => `<div class="lg lg-${e.cat}">
+      <span class="lt">${when(e.at)}</span>
+      <span class="lcat">${e.icon || ""}</span>
+      <span class="lw"><b>${esc(e.what)}</b>${e.whom && e.whom !== "—" ? ` · <span class="mute">${esc(e.whom)}</span>` : ""}${e.note ? `<div class="ln">${esc(e.note)}</div>` : ""}</span>
+      <span class="lres ${e.tone}">${esc(e.res || "")}</span>
+      <span class="lby mute">${esc(e.who || "")}</span></div>`;
+  V.innerHTML = `<div class="card ibtop">
+      <div class="ibt"><h2>📋 יומן פעילות</h2><div class="ibst"><span><b>${ev.length}</b> רשומות</span></div></div>
+      <div class="ibf"><div class="fsw">${[["today", "היום"], ["7d", "7 ימים"], ["all", "הכל"]].map(([v, t]) => `<button class="${LF === v ? "on" : ""}" data-lf="${v}">${t}</button>`).join("")}</div>
+        <input id="lq" type="search" placeholder="🔎 חיפוש ביומן" value="${esc(LQ)}"></div>
+      <div class="ibk"><button class="kf ${LC ? "" : "on"}" data-lc="">הכל</button>${Object.entries(LOGCAT).filter(([k]) => counts[k]).map(([k, t]) => `<button class="kf ${LC === k ? "on" : ""}" data-lc="${k}">${t} · ${counts[k]}</button>`).join("")}</div>
+      <div class="hint">יומן לקריאה בלבד — הכול מה שיצא ללקוחות וכל פעולה שנעשתה בלוח. לא משנה נתונים.</div>
+    </div>
+    <div class="card lgwrap">${ev.length ? `<div class="lghead"><span>זמן</span><span></span><span>מה קרה</span><span>תוצאה</span><span>מי</span></div>${ev.slice(0, 600).map(line).join("")}${ev.length > 600 ? `<div class="mute" style="padding:10px">מוצגות 600 הרשומות האחרונות. לצמצם עם חיפוש או טווח.</div>` : ""}` : `<div class="empty"><div class="big">📋</div>אין רשומות בטווח הזה.</div>`}</div>`;
+  V.querySelectorAll("[data-lf]").forEach(b => b.onclick = () => { LF = b.dataset.lf; try { localStorage.setItem("logRange", LF); } catch (e) {} logView(); });
+  V.querySelectorAll("[data-lc]").forEach(b => b.onclick = () => { LC = b.dataset.lc; logView(); });
+  const qi = $("#lq"); if (qi) qi.oninput = () => { LQ = qi.value; const at = qi.selectionStart; logView().then(() => { const n = $("#lq"); if (n) { n.focus(); n.setSelectionRange(at, at); } }); };
 }
 const wa = (phone, text) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 // display only: which ready message matches the next step (same rule that opens it in the list of messages)

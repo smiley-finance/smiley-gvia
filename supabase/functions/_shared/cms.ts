@@ -2,13 +2,14 @@
 // The rules and the texts are send.js + templates.js next to this file (the same code is copied into index.html by supabase/sync_index.py).
 import "./templates.js";
 import "./send.js";
+import "./replies.js";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 import { emailReady, sendEmail } from "./email.ts";
 import { smsReady, sendSms } from "./sms.ts";
 
 // deno-lint-ignore no-explicit-any
 const G = globalThis as any;
-export const R = G.CMS_SEND, T = G.CMS_T;
+export const R = G.CMS_SEND, T = G.CMS_T, REPLIES = G.CMS_REPLIES;
 export const env = (k: string) => Deno.env.get(k) ?? "";
 
 // service role: only inside the functions, never in the page

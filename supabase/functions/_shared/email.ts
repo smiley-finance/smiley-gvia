@@ -26,6 +26,21 @@ export async function sendEmail(o: { to: string; subject: string; html: string; 
   return info.messageId as string;
 }
 
+// A REPLY to a customer's incoming email: same mailbox, but threaded so Gmail shows it inside the SAME conversation
+// (not a new email). Threading = In-Reply-To + References pointing at the customer's Message-ID, plus a "Re:" subject.
+// inReplyTo = the customer's Message-ID (cms_replies.msg_id). refs = the References chain if we have it.
+export async function sendEmailReply(o: { to: string; subject: string; html: string; text: string; inReplyTo: string; refs?: string[]; attachments?: unknown[] }): Promise<string> {
+  const from = { name: env("MAIL_FROM_NAME") || "Smiley · מחלקת הכספים", address: env("GMAIL_USER") };
+  const re = /^\s*re\s*:/i.test(o.subject) ? o.subject : "Re: " + o.subject;     // Gmail also threads on a matching subject
+  const references = [...(o.refs || []), o.inReplyTo].filter(Boolean).join(" ");
+  const info = await mailer().sendMail({
+    from, replyTo: from, to: o.to, subject: re, html: o.html, text: o.text, attachments: o.attachments || [],
+    inReplyTo: o.inReplyTo, references,
+  });
+  if (info.rejected && info.rejected.length) throw new Error("Gmail דחה את הכתובת: " + info.rejected.join(", "));
+  return info.messageId as string;
+}
+
 // bounces: read the collections@ mailbox over IMAP with the same app password (cms-bounce)
 export const imapAuth = () => ({ user: env("GMAIL_USER"), pass: env("GMAIL_APP_PASSWORD") });
 
