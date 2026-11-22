@@ -159,6 +159,10 @@
     if (q) (ctx.ignoreQuiet ? warnings : errors).push(q + (ctx.ignoreQuiet ? " (מצב בדיקה: מתעלמים)" : ""));
     // 4. the channels
     let email = validEmail(c.email), sms = validPhone(c.phone);
+    // HARD BOUNCE guard (22.11.2026): a previous email to the address the customer STILL has came back (bounced). Stop emailing
+    // that dead address — the SMS flow keeps running, and fixing the customer's email address resumes it. A backup resend (only) keeps its own check below.
+    const emailBouncedSame = email && all.some(m => m.channel === "email" && m.status === "bounced" && String(m.to || "").toLowerCase() === String(c.email || "").toLowerCase());
+    if (emailBouncedSame && !only) email = false;
     const off = ctx.off || {};
     const alone = only ? null : ctx.alone === "email" || ctx.alone === "sms" ? ctx.alone : ctx.emailOnly ? "email" : null;   // agent's choice in the send window
     let hasEmail = email && !(off.email && !only) && alone !== "sms";   // the texts still say "we also emailed you" on an SMS-only resend (not when no email goes out now)
@@ -166,9 +170,9 @@
     if (flow === "sms") hasEmail = all.some(m => m.channel === "email" && m.stage <= stage && m.status !== "failed" && m.status !== "bounced");
     if (only === "email") { if (!email) errors.push("אין כתובת מייל תקינה ללקוח"); sms = false; }
     if (only === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין"); email = false; }
-    if (alone === "email") { if (!email) errors.push("אין כתובת מייל תקינה: אי אפשר לשלוח מייל בלבד"); sms = false; }
+    if (alone === "email") { if (!email) errors.push(emailBouncedSame ? "המייל של הלקוח חזר (bounce) מהכתובת הזו: לא שולחים מייל עד שהכתובת תתוקן. ה-SMS ממשיך בנפרד" : "אין כתובת מייל תקינה: אי אפשר לשלוח מייל בלבד"); sms = false; }
     if (alone === "sms") { if (!sms) errors.push("אין מספר נייד ישראלי תקין: אי אפשר לשלוח SMS בלבד"); email = false; }
-    if (!only && !alone && !email) warnings.push(c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
+    if (!only && !alone && !email) warnings.push(emailBouncedSame ? "המייל של הלקוח חזר (bounce) מהכתובת הזו: יישלח SMS בלבד עד שהכתובת תתוקן" : c.email ? `כתובת המייל לא תקינה (${c.email}): יישלח SMS בלבד` : "אין מייל ללקוח: יישלח SMS בלבד. כדאי להמשיך בוואטסאפ");
     if (!only && !alone && !sms) warnings.push("מספר הטלפון אינו נייד ישראלי: יישלח מייל בלבד");
     if (!only && !alone && !email && !sms) errors.push("אין מייל ואין נייד תקין: אי אפשר לשלוח");
     // main switch: a channel that is off is skipped, whatever was chosen above
