@@ -1228,11 +1228,11 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
     </header>
     <nav class="nav" id="nav">
       <div class="ng"><div class="nb">
-        <button class="tab on" data-v="sum">📊 סיכום</button><button class="tab" data-v="cust">👥 לקוחות</button></div></div>
+        <button class="tab" data-v="sum">📊 סיכום</button><button class="tab" data-v="cust">👥 לקוחות</button></div></div>
       <div class="ng wa"><div class="nb">
         <button class="tab" data-v="all">💬 וואטסאפ</button></div></div>
       <div class="ng em"><div class="nb">
-        <button class="tab" data-v="track">📧 מייל</button><button class="tab" data-v="inbox">📥 תשובות <span class="cnt hide" id="inbN"></span></button><button class="tab" data-v="sms">📱 SMS</button></div></div>
+        <button class="tab" data-v="track">📧 מייל</button><button class="tab on" data-v="inbox">📥 תשובות <span class="cnt hide" id="inbN"></span></button><button class="tab" data-v="sms">📱 SMS</button></div></div>
       <div class="ng"><div class="nb">
         <button class="tab" data-v="log">📋 יומן</button><button class="tab" data-v="pay">עמלות ושכר</button></div></div>
     </nav>
@@ -1277,7 +1277,7 @@ const HOLD = "בבדיקה/המתנה";                                  // PROP
 const STATUSES = ["חדש","נשלחה הודעה","בתהליך",HOLD,"בוצע – ממתין לאימות","נשלח מכתב התראה","סגור"];
 const DONE = "בוצע – ממתין לאימות";
 const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
-let ME = null, ADMIN = false, EARNS = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "sum", SEL = null, WAEV = [];
+let ME = null, ADMIN = false, EARNS = false, AGENT_VIEW = false, CASES = [], PAYS = [], PAYOUTS = [], VIEW = "inbox", SEL = null, WAEV = [];
 let SW = { email: true, sms: true };                            // MAIN SWITCH (cms_switches): false = that channel is off for every send
 const OFF = () => ({ email: !SW.email, sms: !SW.sms });
 let MSGS = [], ALLCASES = [], TF = { p: "w", st: "", q: "", col: "" };
@@ -1346,7 +1346,7 @@ async function start(){
   mode();
   STATUSES.forEach(s => $("#fs").insertAdjacentHTML("beforeend", `<option>${s}</option>`));
   const v = ls("view");                                        // open on the tab used last time
-  if (["sum", "cust", "all", "pay", "track", "sms"].includes(v)) { VIEW = v; document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.v === v)); }
+  if (["sum", "cust", "all", "pay", "track", "sms", "inbox", "log"].includes(v)) { VIEW = v; document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.v === v)); }
   $("#srt").value = SORT;
   await load();
   live();
