@@ -51,30 +51,30 @@ Deno.serve(async (req) => {
 
   // ---------- a clicker's send ----------
   const by = await agent(sb, req);
-  if (!by) return json(req, { ok: false, error: "צריך להתחבר מחדש" }, 401);
+  if (!by) return json(req, { ok: false, error: "צריך להתחבר מחדש" });
   const id = Number(body.reply_id);
-  if (!Number.isInteger(id) || id <= 0) return json(req, { ok: false, error: "reply_id לא תקין" }, 400);
+  if (!Number.isInteger(id) || id <= 0) return json(req, { ok: false, error: "reply_id לא תקין" });
 
   const { data: reply } = await sb.from("cms_replies").select("*").eq("id", id).maybeSingle();
-  if (!reply) return json(req, { ok: false, error: "התשובה לא נמצאה" }, 404);
-  if (reply.replied_at) return json(req, { ok: false, error: "כבר נשלחה תשובה לפנייה הזו" }, 409);
-  if (!reply.from_email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(reply.from_email)) return json(req, { ok: false, error: "אין כתובת מייל תקינה לפנייה" }, 400);
-  if (!reply.msg_id) return json(req, { ok: false, error: "חסר מזהה הודעה לשרשור" }, 400);
-  if (!reply.phone) return json(req, { ok: false, error: "הפנייה לא שויכה ללקוח — יש לענות ב-Gmail" }, 400);
+  if (!reply) return json(req, { ok: false, error: "התשובה לא נמצאה" });
+  if (reply.replied_at) return json(req, { ok: false, error: "כבר נשלחה תשובה לפנייה הזו" });
+  if (!reply.from_email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(reply.from_email)) return json(req, { ok: false, error: "אין כתובת מייל תקינה לפנייה" });
+  if (!reply.msg_id) return json(req, { ok: false, error: "חסר מזהה הודעה לשרשור" });
+  if (!reply.phone) return json(req, { ok: false, error: "הפנייה לא שויכה ללקוח — יש לענות ב-Gmail" });
 
   const c = await loadCase(sb, reply.phone);
-  if (!c) return json(req, { ok: false, error: "התיק לא נמצא" }, 404);
+  if (!c) return json(req, { ok: false, error: "התיק לא נמצא" });
 
   // the text is built here, from the DB — the browser cannot choose the words
   const built = REPLIES.build(c, reply.kind);
-  if (!built) return json(req, { ok: false, error: "אין תשובה מוכנה לסוג הזה — יש לענות ב-Gmail" }, 400);
+  if (!built) return json(req, { ok: false, error: "אין תשובה מוכנה לסוג הזה — יש לענות ב-Gmail" });
 
   // same guards as every send: the email switch and the main kill-switch, and the test allowlist if on
-  if (!sendingOn) return json(req, { ok: false, error: "השליחה כבויה (CMS_SENDING)" }, 403);
+  if (!sendingOn) return json(req, { ok: false, error: "השליחה כבויה (CMS_SENDING)" });
   const off = await switchesOff(sb);
-  if (off.email) return json(req, { ok: false, error: "המייל כבוי במתג הראשי" }, 403);
-  if (testMode && !isTestRecipient(reply.from_email)) return json(req, { ok: false, error: "מצב בדיקה: הכתובת אינה ברשימת הבדיקה" }, 403);
-  if (!emailReady()) return json(req, { ok: false, error: "המייל לא מוגדר בשרת" }, 500);
+  if (off.email) return json(req, { ok: false, error: "המייל כבוי במתג הראשי" });
+  if (testMode && !isTestRecipient(reply.from_email)) return json(req, { ok: false, error: "מצב בדיקה: הכתובת אינה ברשימת הבדיקה" });
+  if (!emailReady()) return json(req, { ok: false, error: "המייל לא מוגדר בשרת" });
 
   try {
     const attachments = built.image ? [await imageAttachment(built.image)] : [];
@@ -88,6 +88,6 @@ Deno.serve(async (req) => {
     await sb.from("cms_runs").insert({ kind: "reply", sent: 1, note: `✉️ תשובה (${reply.kind}) נשלחה ללקוח · ${by}` });
     return json(req, { ok: true, reply_msg_id: msgId });
   } catch (e) {
-    return json(req, { ok: false, error: "שליחה נכשלה: " + String((e as Error).message || e).slice(0, 200) }, 500);
+    return json(req, { ok: false, error: "שליחה נכשלה: " + String((e as Error).message || e).slice(0, 200) });
   }
 });
