@@ -92,12 +92,15 @@ Deno.serve(async (req) => {
         subject: (m.envelope?.subject || "").slice(0, 200), refs, part: textPart(m.bodyStructure) });
     }
     seen = env1.length;
-    // only replies we have not saved yet
-    const known = new Set<string>();
-    for (let i = 0; i < env1.length; i += 200) {
-      const { data } = await sb.from("cms_replies").select("msg_id").in("msg_id", env1.slice(i, i + 200).map(x => x.msg_id));
-      (data || []).forEach((r: { msg_id: string }) => known.add(r.msg_id));
-    }
+    // only replies we have not saved yet.
+    // FIX (22.11.2026 incident): this used to call .in("msg_id", [all incoming ids]); once the 10-day window held
+    // ~200+ mails that GET URL blew past the length limit, the query errored, `known` came back empty, and every run
+    // got stuck re-inserting the 25 OLDEST already-saved mails (unique-key -> 0 saved) and never reached the new ones.
+    // Now we read OUR OWN stored ids (a small, reliable SELECT) and compare in memory — no incoming ids in a filter.
+    step = "known";
+    const { data: knownRows, error: knownErr } = await sb.from("cms_replies").select("msg_id");
+    if (knownErr) { bye(client); return json(req, { ok: false, error: "known-check: " + knownErr.message }, 500); }
+    const known = new Set<string>((knownRows || []).map((r: { msg_id: string }) => r.msg_id));
     const todo = env1.filter(x => !known.has(x.msg_id)).sort((a, b) => a.at.localeCompare(b.at));
     const cap = MAX_NEW;                                      // at most 25 per run (each text is one IMAP round trip); the rest next run
     waiting = Math.max(0, todo.length - cap);
@@ -119,6 +122,7 @@ Deno.serve(async (req) => {
   // match each reply to a customer: our Message-ID first, then the sender's address (only if it points to ONE customer)
   // deno-lint-ignore no-explicit-any
   const out: any[] = [];
+  let saved = 0;
   for (const r of fresh) {
     let phone: string | null = null, how = "";
     if (r.refs.length) {
@@ -135,12 +139,13 @@ Deno.serve(async (req) => {
     if (dry) continue;
     const { error } = await sb.from("cms_replies").insert({ msg_id: r.msg_id, phone, from_email: r.from, subject: r.subject, snippet: r.snippet,
       kind: r.kind, at: r.at });
-    if (error) continue;                                         // already saved by a run at the same moment: do nothing twice
+    if (!error) saved++;                                          // count only what really landed (a dup from a same-moment run is fine)
   }
   const nNew = out.length;
-  if (nNew && !dry) await sb.from("cms_runs").insert({ kind: "inbox", sent: 0, note: `📥 ${nNew} תשובות חדשות מלקוחות` });
+  // the run-log shows what ACTUALLY saved (not just candidates), so a stall like the 22.11 one shows as "0" and can't hide
+  if (!dry && saved) await sb.from("cms_runs").insert({ kind: "inbox", sent: saved, note: `📥 ${saved} תשובות חדשות מלקוחות` });
   // counts only: no customer details in the response (it lands in net._http_response)
   const by = (k: string) => out.reduce((a: Record<string, number>, o) => { const v = String((o as Record<string, unknown>)[k]); a[v] = (a[v] || 0) + 1; return a; }, {});
-  return json(req, { ok: true, dry, seen, new: nNew, waiting_next_run: waiting, matched: out.filter(o => o.phone).length,
+  return json(req, { ok: true, dry, seen, candidates: nNew, saved, waiting_next_run: waiting, matched: out.filter(o => o.phone).length,
     kinds: by("kind"), matched_by: by("how") });
 });
