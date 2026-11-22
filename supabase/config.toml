@@ -16,3 +16,7 @@ verify_jwt = false
 
 [functions.cms-inbox]
 verify_jwt = false
+
+# cms-reply-send: checks the logged-in clicker itself (or the server key for the self-test), so the gateway check is off.
+[functions.cms-reply-send]
+verify_jwt = false

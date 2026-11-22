@@ -4,7 +4,7 @@
 // It also plays the future Edge Function "cms-send": rpc("cms_send", { p_phone, p_stage })
 // -> checks the rules (send.js), writes the messages log + history, moves the status, then fakes delivery reports.
 (function (root) {
-  const KEY = "cms-mock-v6";
+  const KEY = "cms-mock-v8";
   const STATUSES_OK = ["חדש", "נשלחה הודעה", "בתהליך", "בוצע – ממתין לאימות", "נשלח מכתב התראה", "סגור"];   // what coll_set_status accepts today
   const clone = o => JSON.parse(JSON.stringify(o));
   let DB;
@@ -30,7 +30,9 @@
       snippet, kind, kind_by: null, at: ago(n > 8 ? n - 8.7 : n * 3 + 1), handled_at: n === 8 ? ago(1) : null, handled_by: n === 8 ? "agent@mock.test" : null }));
   }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) {} };
-  const TABLES = { coll_cases: "cases", coll_events: "events", coll_payments: "payments", coll_payouts: "payouts", coll_admins: "admins", cms_messages: "messages", cms_events: "cms_events", cms_replies: "replies" };
+  const TABLES = { coll_cases: "cases", coll_events: "events", coll_payments: "payments", coll_payouts: "payouts", coll_admins: "admins", cms_messages: "messages", cms_events: "cms_events", cms_replies: "replies", cms_runs: "runs" };
+  if (!DB.runs) { const ago = h => new Date(Date.now() - h * 36e5).toISOString();
+    DB.runs = [{ id: 2, kind: "switch", note: "📱 SMS כובה במתג הראשי · agent@mock.test", at: ago(26) }, { id: 1, kind: "switch", note: "📧 מייל הופעל במתג הראשי · agent@mock.test", at: ago(70) }]; }
   const wait = (v, ms = 120) => new Promise(r => setTimeout(() => r(v), ms));   // feels like a server
 
   // from("table").select("*").eq(k, v).order(k, { ascending }) -> await gives { data, error }
@@ -205,6 +207,17 @@
         return wait({ data: Object.assign({ ok: !r.error, sent: [], failed: [] }, r.data || {}, r.error ? { ok: false, error: r.error.message } : {}), error: null }, 600);
       }
       if (name === "cms-health") return wait({ data: health(), error: null }, 300 + Math.random() * 300);
+      if (name === "cms-reply-send") {                           // play cms-reply-send: mark the reply sent (no real email)
+        const r = (DB.replies || []).find(x => x.id === b.reply_id);
+        if (!r) return wait({ data: { ok: false, error: "התשובה לא נמצאה" }, error: null }, 400);
+        if (r.replied_at) return wait({ data: { ok: false, error: "כבר נשלחה תשובה לפנייה הזו" }, error: null }, 400);
+        if (!r.phone) return wait({ data: { ok: false, error: "הפנייה לא שויכה ללקוח" }, error: null }, 400);
+        const now = new Date().toISOString();
+        r.replied_at = now; r.replied_by = "agent@mock.test"; r.reply_msg_id = "<sent-" + r.id + "@mock.test>"; r.handled_at = r.handled_at || now; r.handled_by = r.handled_by || "agent@mock.test";
+        DB.runs = DB.runs || []; DB.runs.unshift({ id: (DB.runs[0]?.id || 0) + 1, kind: "reply", note: "✉️ תשובה (" + r.kind + ") נשלחה ללקוח · agent@mock.test (הדגמה)", at: now });
+        save();
+        return wait({ data: { ok: true, reply_msg_id: r.reply_msg_id }, error: null }, 700);
+      }
       return wait({ data: null, error: { message: "unknown function " + name } });
     } },
     storage: { from: () => ({ createSignedUrl: path => {
