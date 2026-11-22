@@ -76,6 +76,15 @@ Deno.serve(async (req) => {
   if (testMode && !isTestRecipient(reply.from_email)) return json(req, { ok: false, error: "מצב בדיקה: הכתובת אינה ברשימת הבדיקה" });
   if (!emailReady()) return json(req, { ok: false, error: "המייל לא מוגדר בשרת" });
 
+  // ATOMIC CLAIM: mark this reply "being sent" only if nobody else already did (replied_at is null).
+  // Two clickers hitting send on the same reply at once -> Postgres serializes the UPDATE, exactly one row
+  // comes back, so only one of them sends. The loser gets "already replied" and no second email goes out.
+  const now = new Date().toISOString();
+  const { data: claimed, error: claimErr } = await sb.from("cms_replies")
+    .update({ replied_at: now, replied_by: by }).eq("id", id).is("replied_at", null).select("id");
+  if (claimErr) return json(req, { ok: false, error: "לא ננעל לשליחה: " + claimErr.message });
+  if (!claimed || !claimed.length) return json(req, { ok: false, error: "כבר נשלחה תשובה לפנייה הזו" });
+
   try {
     const attachments = built.image ? [await imageAttachment(built.image)] : [];
     const refs = Array.isArray(reply.refs) ? reply.refs : undefined;
@@ -83,11 +92,12 @@ Deno.serve(async (req) => {
       to: reply.from_email, subject: reply.subject || "חוב פתוח", inReplyTo: reply.msg_id, refs,
       text: built.body, html: toHtml(built.body, !!built.image), attachments,
     });
-    const now = new Date().toISOString();
-    await sb.from("cms_replies").update({ replied_at: now, replied_by: by, reply_msg_id: msgId, handled_at: reply.handled_at || now, handled_by: reply.handled_by || by }).eq("id", id);
+    await sb.from("cms_replies").update({ reply_msg_id: msgId, handled_at: reply.handled_at || now, handled_by: reply.handled_by || by }).eq("id", id);
     await sb.from("cms_runs").insert({ kind: "reply", sent: 1, note: `✉️ תשובה (${reply.kind}) נשלחה ללקוח · ${by}` });
     return json(req, { ok: true, reply_msg_id: msgId });
   } catch (e) {
+    // the send failed -> release the claim so the reply can be tried again (don't leave it falsely "replied")
+    await sb.from("cms_replies").update({ replied_at: null, replied_by: null }).eq("id", id);
     return json(req, { ok: false, error: "שליחה נכשלה: " + String((e as Error).message || e).slice(0, 200) });
   }
 });
