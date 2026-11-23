@@ -24,6 +24,11 @@
       `לא התקבל תשלום בקישור האישי. אם שולם בדרך אחרת, יש להשיב למייל זה ולצרף צילום של אישור התשלום. עד אז התיק פתוח.\n${c.payment_link}` },
     legal: { title: '"תתבעו אותי" / סירוב', img: null, body: c =>
       `הודעתך נרשמה. החוב בסך ${c.total} פתוח, ויישלח אלייך מכתב התראה רשמי לפני נקיטת הליכים. עד אז עדיין ניתן להסדיר את החוב בקישור:\n${c.payment_link}` },
+    // 22.11.2026 (Yair): word for word from the WhatsApp reply (index.html clientMsgs). A return goes through customer
+    // service and never offsets the disputed debt; a subscription is cancelled by the customer in the portal (and in a
+    // subscription case we note it is already stopped here). [סכום]=c.total, [קישור]=c.payment_link.
+    retsub: { title: "רוצה להחזיר מוצר / לבטל מנוי", img: null, body: c =>
+      `החזרת מוצר מתבצעת מול שירות הלקוחות של Smiley בוואטסאפ 053-396-5246, ואינה קשורה לחוב הזה. החוב הוא על משלוחים שכבר סופקו ושהתשלום עליהם בוטל דרך חברת האשראי, ולכן החזרת מוצר אינה מקזזת אותו.\nביטול מנוי אפשרי באופן מלא ועצמאי בפורטל המנויים: try-smiley.com/account${c.kind === "sub" ? " (בתיק הזה המנוי כבר הופסק אצלנו, ולא יהיו חיובים נוספים)" : ""}. ביטול מנוי מונע חיובים עתידיים בלבד, ואינו מבטל את החוב על מה שכבר נשלח.\nהחוב בסך ${c.total} פתוח, וניתן להסדיר אותו בקישור האישי:\n${c.payment_link}` },
   };
 
   // build the one ready reply for a kind -> { title, body, image } | null (null = no ready reply for this kind/case)
@@ -37,7 +42,7 @@
 
   // the full list the dashboard shows (same order as before: pay, who, notrecv, [sub], paid, legal)
   function list(c) {
-    const order = ["pay", "who", "notrecv", "paid", "legal"];
+    const order = ["pay", "who", "notrecv", "paid", "legal", "retsub"];
     const out = order.map(k => build(c, k)).filter(Boolean).map(r => [r.title, r.body, r.image]);
     const sub = build(c, "sub");
     if (sub) out.splice(2, 0, [sub.title + " (לצרף את התמונה למייל)", sub.body, sub.image]);
