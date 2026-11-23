@@ -44,7 +44,8 @@
       then: (ok, bad) => {
         const src = table === "cms_cases"     // real server: its own table. Here: read from the mock cases
           ? DB.cases.map(c => ({ phone: c.phone, email_status: c.email_status || "חדש", email_touched_at: c.email_touched_at || null, email_last_at: c.email_last_at || null,
-              sms_status: c.sms_status || null, sms_touched_at: c.sms_touched_at || null, sms_last_at: c.sms_last_at || null }))
+              sms_status: c.sms_status || null, sms_touched_at: c.sms_touched_at || null, sms_last_at: c.sms_last_at || null,
+              cs_forwarded_at: c.cs_forwarded_at || null, cs_forwarded_by: c.cs_forwarded_by || null }))
           : DB[TABLES[table]] || [];
         let rows = clone(src).filter(r => f.every(fn => fn(r)));
         o.forEach(([k, d]) => rows.sort((a, b) => String(a[k] ?? "").localeCompare(String(b[k] ?? "")) * d));
@@ -193,6 +194,7 @@
         if (args.p_handled !== null && args.p_handled !== undefined) { r.handled_at = args.p_handled ? new Date().toISOString() : null; r.handled_by = args.p_handled ? "agent@mock.test" : null; } }
         save(); return wait({ error: null }); }
       if (name === "cms_set_status") { const e = setEmailStatus(args.p_phone, args.p_status, args.p_note); save(); return wait({ error: e }); }
+      if (name === "cms_set_cs_forward") { const c = DB.cases.find(x => x.phone === args.p_phone); if (c) { c.cs_forwarded_at = args.p_on ? new Date().toISOString() : null; c.cs_forwarded_by = args.p_on ? "agent@mock.test" : null; } save(); return wait({ error: null }); }
       if (name === "cms_send") return wait(cmsSend(args), 600);
       if (name === "cms_auto_run") return wait({ data: runAuto(), error: null }, 300);
       if (name === "mock_skip_day") return wait({ data: skipDay(), error: null }, 300);
