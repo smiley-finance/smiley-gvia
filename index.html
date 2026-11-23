@@ -612,6 +612,7 @@ header .btn:hover{background:rgba(255,255,255,.25)}
 .pfs button.on{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 25%,transparent)}
 .pfs button.on.pd{border-color:#1baf7a;box-shadow:0 0 0 2px rgba(27,175,122,.25)}
 .pfs button.on.op{border-color:#eb6834;box-shadow:0 0 0 2px rgba(235,104,52,.22)}
+.pfs button.on.csf{border-color:#0e7490;box-shadow:0 0 0 2px rgba(14,116,144,.22)}
 .pfs button:focus-visible{outline:none;box-shadow:var(--ring)}
 .pdl{margin-top:2px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,#1baf7a 9%,transparent);border:1px solid color-mix(in srgb,#1baf7a 30%,transparent)}
 .pdl div{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
@@ -992,6 +993,8 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,
 .ibe{min-height:200px;display:grid;place-content:center;text-align:center}
 .mstop{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0;padding:8px 12px;border-radius:12px;border:1px dashed var(--line);font-size:13px}
 .mstop.on{border:1px solid #c4b5fd;background:#f5f3ff}.mstop.on b{color:#6d28d9}
+.mstop.csf.on{border:1px solid #7dd3c8;background:#f0fdfa}.mstop.csf.on b{color:#0f766e}
+.kd-csf{background:#ccfbf1;color:#0f766e}
 .mstop .sure,[data-mstop].sure{background:var(--bad);color:#fff;border-color:var(--bad)}
 @media (max-width:900px){.ibx{grid-template-columns:1fr}.ibx.sel .ibl{display:none}.ibx:not(.sel) .ibp{display:none}.ibl{max-height:none}.ibp{position:static}.ibback{display:inline-flex}}
 .btn.send.sure{background:var(--bad);border-color:var(--bad);color:#fff}
@@ -1423,7 +1426,8 @@ async function load1(bg){
   // the email/SMS flow keeps its own status in cms_cases (coll_cases is not changed): put it on each case
   const EC = Object.fromEntries((ec.data || []).map(r => [r.phone, r]));
   (c.data || []).forEach(x => { const e = EC[x.phone]; x.email_status = e ? e.email_status : "חדש"; x.email_touched_at = e ? e.email_touched_at : null; x.email_last_at = e ? e.email_last_at : null;
-    x.sms_status = e ? e.sms_status || null : null; x.sms_touched_at = e ? e.sms_touched_at : null; x.sms_last_at = e ? e.sms_last_at : null; });
+    x.sms_status = e ? e.sms_status || null : null; x.sms_touched_at = e ? e.sms_touched_at : null; x.sms_last_at = e ? e.sms_last_at : null;
+    x.cs_forwarded_at = e ? e.cs_forwarded_at || null : null; x.cs_forwarded_by = e ? e.cs_forwarded_by || null : null; });
   const newPays = first ? [] : (p.data || []).filter(x => !PAYS.some(y => y.id === x.id) && x.amount > 0);
   ALLCASES = c.data || [];                                     // tracking also counts closed / paid cases
   CASES = (c.data || []).filter(x => !isPaid(x));            // paid and verified = gone from the desk
@@ -1727,6 +1731,7 @@ function rerenderOpen(){
   if (VIEW === "inbox") inbox();
   if (EP && !$("#ep").classList.contains("hide")) openEmail(EP, EF);
   if (SEL && VIEW !== "inbox" && typeof openCase === "function" && CASES.some(x => x.phone === SEL)) openCase(SEL, true);
+  if (VIEW === "cust") customers();
 }
 document.addEventListener("click", e => {                          // one handler for every 🔕 button (inbox, case panel, email panel)
   const b = e.target.closest("[data-mstop]"); if (!b) return;
@@ -1736,6 +1741,32 @@ document.addEventListener("click", e => {                          // one handle
     return setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = t; } }, 4000);
   }
   setStop(b.dataset.mstop, on);
+});
+
+// 📞 "forwarded to customer service" (23.11.2026, Yair's note): a per-customer TAG a clicker sets when a return /
+// cancellation is handed to customer service (WhatsApp 053-396-5246). It does NOT change any status or pause the
+// timer — a return does not cancel the debt, so the automated collection flow keeps running. Server: cms_cases
+// .cs_forwarded_at/by via RPC cms_set_cs_forward. Visible as a chip + filter; usable for any customer, any channel.
+const isCS = c => !!(c && c.cs_forwarded_at);
+function csBox(c){
+  if (!c) return "";
+  const when = c.cs_forwarded_at ? new Date(c.cs_forwarded_at).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+  return isCS(c)
+    ? `<div class="mstop csf on"><b>📞 הועבר לשירות לקוחות</b><span class="mute">החזרה / בירור מטופלים בשירות הלקוחות. גביית החוב ממשיכה כרגיל.${c.cs_forwarded_by ? ` · סומן ע"י ${esc(c.cs_forwarded_by)} · ${when}` : ""}</span><span class="sp"></span><button class="btn sm" data-csf="${c.phone}" data-on="0">↩️ בטל סימון</button></div>`
+    : `<div class="mstop csf"><span class="mute">החזרת מוצר / בירור מול שירות הלקוחות? אפשר לסמן שהלקוח הועבר לשם. הטיימר ממשיך כרגיל.</span><span class="sp"></span><button class="btn sm" data-csf="${c.phone}" data-on="1">📞 הועבר לשירות לקוחות</button></div>`;
+}
+async function setCS(phone, on){
+  const c = ALLCASES.find(x => x.phone === phone); if (!c) return;
+  const { error } = await SB.rpc("cms_set_cs_forward", { p_phone: phone, p_on: on });
+  if (error) { toast("לא נשמר: " + error.message); load(true); return; }
+  c.cs_forwarded_at = on ? new Date().toISOString() : null; c.cs_forwarded_by = on ? (ME || "") : null;
+  rerenderOpen();
+  toast(on ? "📞 סומן: הועבר לשירות לקוחות" : "↩️ הסימון בוטל", on ? () => setCS(phone, false) : null);
+  load(true);
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-csf]"); if (!b) return;
+  setCS(b.dataset.csf, b.dataset.on === "1");
 });
 
 // ---------- the 📥 page: one line per customer (all their replies together), filters + search on top, details on the side ----------
@@ -1771,7 +1802,7 @@ function inbox(){
   const kchip = k => `<span class="kd kd-${k}">${esc((RK[k] || RK.other)[0])}</span>`;
   const row = g => `<button class="ibr ${g.k === IG ? "on" : ""} ${g.op.length ? (g.returned ? "ret" : "") : "done"}" data-ig="${esc(g.k)}">
       <span class="r1"><b>${esc(g.name)}</b>${g.rs.length > 1 ? `<span class="nn">${g.rs.length}</span>` : ""}<span class="sp"></span><span class="mute">${when(g.last.at)}</span></span>
-      <span class="r2">${kchip(g.kind)}${g.returned ? `<span class="kd kd-ret">🔁 חזר אחרי תשובה</span>` : ""}${isStopped(g.c) ? `<span class="kd kd-stop">🔕 כבוי</span>` : ""}${g.state === "answered" ? `<span class="kd kd-ok">✉️ נענה</span>` : g.state === "handled" ? `<span class="kd">✓ טופל ידנית</span>` : ""}${g.c ? `<span class="mute">${esc(g.c.total)}</span>` : ""}</span>
+      <span class="r2">${kchip(g.kind)}${g.returned ? `<span class="kd kd-ret">🔁 חזר אחרי תשובה</span>` : ""}${isStopped(g.c) ? `<span class="kd kd-stop">🔕 כבוי</span>` : ""}${isCS(g.c) ? `<span class="kd kd-csf">📞 בשירות לקוחות</span>` : ""}${g.state === "answered" ? `<span class="kd kd-ok">✉️ נענה</span>` : g.state === "handled" ? `<span class="kd">✓ טופל ידנית</span>` : ""}${g.c ? `<span class="mute">${esc(g.c.total)}</span>` : ""}</span>
       <span class="r3">${esc((g.last.snippet || "(אין טקסט)").replace(/\s+/g, " ").slice(0, 90))}</span></button>`;
   const detail = g => { if (!g) return `<div class="card empty ibe"><div class="big">👈</div>לבחור לקוח מהרשימה כדי לראות מה כתב ומה לענות.</div>`;
     const c = g.c, top = g.op[0] || g.last, k = RK[top.kind] || RK.other;
@@ -1790,7 +1821,7 @@ function inbox(){
         <h2>${esc(g.name)}</h2>${c ? `<span class="mute">${esc(c.total)}${c.kind === "sub" ? " · מנוי" : ""} · ${(c.orders || []).map(o => esc(o.order)).join(", ")}</span>` : ""}</div>
       <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(g.last.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>
         ${g.op.length ? `<button class="btn sm p" data-iball="${esc(g.k)}">✓ סמן הכל כטופל (${g.op.length})</button>` : ""}</div>
-      ${stopBox(c)}
+      ${stopBox(c)}${csBox(c)}
       <h3>💬 מה לענות${g.op.length ? (g.returned ? " · 🔁 חזר אחרי שנענה" : "") : g.state === "answered" ? " (כבר נענה)" : " (טופל ידנית)"}: ${esc(k[0])}</h3>
       <div class="ibs">${sug}</div>
       <h3>✉️ מה הלקוח כתב (${g.rs.length})</h3>
@@ -1959,7 +1990,7 @@ function openCase(phone, keepScroll){
       <h2>${esc(c.name)} ${chip(c)}</h2>
       <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${esc(c.email)}</span></div>
       <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}</div>
-      ${stopBox(ALLCASES.find(x => x.phone === phone) || c)}
+      ${stopBox(ALLCASES.find(x => x.phone === phone) || c)}${csBox(ALLCASES.find(x => x.phone === phone) || c)}
       ${ships.length ? `<div class="ships">${ships.map(([o, s]) => `<div class="ship">📦 <span>${esc(o.order)} · ${esc(s.carrier)}</span><span class="tn">${esc(s.tracking)}</span><b>${esc(s.status)}</b>${s.date ? `<span class="mute">${esc(s.date)}</span>` : ""}<span class="sp"></span>
         <button class="btn sm" data-copy="${esc(s.tracking)}">📋 העתק מספר מעקב</button>${s.tracking_url ? `<a class="btn sm" href="${esc(s.tracking_url)}" target="_blank">🔎 מעקב ב-17track</a>` : ""}</div>`).join("")}</div>` : ""}
     </div>
@@ -2108,7 +2139,7 @@ function openEmail(phone, flow){
       <h2>${esc(c.name)} ${echip(st)}</h2>
       <div class="meta"><b>${esc(c.total)}</b><span>${esc(c.case_type)}</span><span class="ph">${esc(local(c.phone))}</span><span>${c.email ? esc(c.email) : `<span class="wn">אין מייל</span>`}</span></div>
       <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.email ? `<button class="btn sm" data-copy="${esc(c.email)}">📋 העתק מייל</button>` : ""}</div>
-      ${stopBox(c)}
+      ${stopBox(c)}${csBox(c)}
       ${phaseLine(t)}
       <div class="wahint">💬 וואטסאפ: <b>${esc(c.status)}</b> · ${FNM[OF]}: <b>${esc(ot.status)}</b>${ot.stage ? ` (שלב ${ot.stage})` : ""} · כל זרימה נפרדת, לא משתנה מכאן</div>
     </div>
@@ -2617,7 +2648,9 @@ function customers(){
   const when = c => PD ? payInfo(c).last || cameIn(c) : cameIn(c);
   const inRange = ALLCASES.filter(c => when(c) && new Date(when(c)) >= from && new Date(when(c)) < to).filter(c => !CF.q || hit(c, CF.q.toLowerCase()));
   const nPaid = inRange.filter(paidC).length, nOpen = inRange.length - nPaid;
-  const list = inRange.filter(c => !CF.pf || (PD ? paidC(c) : !paidC(c))).sort((a, b) => when(b).localeCompare(when(a)));
+  const nCS = inRange.filter(isCS).length;
+  if (CF.pf === "cs" && !nCS) { CF.pf = ""; ls("custPF", ""); }   // the last forwarded customer was un-marked: don't leave an empty filtered page
+  const list = inRange.filter(c => !CF.pf ? true : CF.pf === "cs" ? isCS(c) : (PD ? paidC(c) : !paidC(c))).sort((a, b) => when(b).localeCompare(when(a)));
   const days = {}; list.forEach(c => (days[jday(when(c))] = days[jday(when(c))] || []).push(c));
   const keys = Object.keys(days).sort().reverse();
   const today = (days[jday(Date.now())] || []).length;
@@ -2631,7 +2664,7 @@ function customers(){
   const row = c => `<div class="cu ${CF.open === c.phone ? "op" : ""}" data-cu="${c.phone}">
       <div class="cu1">
         <span class="ct">${tm(when(c))}</span>
-        <div class="cn"><b>${esc(c.name)}</b><span class="mute">${esc(c.case_type || "")}${c.kind === "sub" ? " · מנוי" : ""}</span></div>
+        <div class="cn"><b>${esc(c.name)}</b><span class="mute">${esc(c.case_type || "")}${c.kind === "sub" ? " · מנוי" : ""}</span>${isCS(c) ? `<span class="kd kd-csf">📞 שירות לקוחות</span>` : ""}</div>
         <span class="cph" dir="ltr">${esc(local(c.phone))}</span>
         <span class="cem">${c.email ? esc(c.email) : `<span class="wn">אין מייל</span>`}</span>
         <span class="cor">${esc(c.orders_label || "")}</span>
@@ -2643,6 +2676,7 @@ function customers(){
         <div><span class="k">נכנס</span>${new Date(cameIn(c)).toLocaleString("he-IL")}</div>
         ${payBox(c)}
         <div class="qc"><button class="btn sm" data-copy="${esc(local(c.phone))}">📋 העתק טלפון</button>${c.email ? `<button class="btn sm" data-copy="${esc(c.email)}">📋 העתק מייל</button>` : ""}${c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}</div>
+        ${csBox(c)}
         ${(c.orders || []).map(o => `<div class="order"><b>${esc(o.order)}</b> · ${esc(o.order_date)} · ${esc(o.amount)}<br><span class="mute">${esc(o.products)}</span>
           ${o.shipments.map(s => `<br>${esc(s.carrier)} <span dir="ltr">${esc(s.tracking)}</span> · <b>${esc(s.status)}</b>${s.date ? " · " + esc(s.date) : ""}`).join("")}</div>`).join("")}
         <div class="tl2">${timeline(c)}</div>
@@ -2650,7 +2684,7 @@ function customers(){
     </div>`;
   $("#vCust").innerHTML = `
     <div class="sumh"><h2>👥 לקוחות</h2><span class="mute">${list.length} לקוחות · ${keys.length} ימים${today ? ` · <b class="okk">${PD ? `💰 ${today} שילמו היום` : `🆕 ${today} נכנסו היום`}</b>` : ""}${PD ? ` · נגבה ${ils(dsum(list))}` : ""}</span><span class="sp"></span>
-      <div class="pfs" id="cpf">${[["", "👥 כולם", inRange.length, ""], ["paid", "✓ שילמו", nPaid, "pd"], ["open", "⏳ לא שילמו", nOpen, "op"]].map(([k, t, n, cl]) =>
+      <div class="pfs" id="cpf">${[["", "👥 כולם", inRange.length, ""], ["paid", "✓ שילמו", nPaid, "pd"], ["open", "⏳ לא שילמו", nOpen, "op"], ...(nCS ? [["cs", "📞 בשירות לקוחות", nCS, "csf"]] : [])].map(([k, t, n, cl]) =>
         `<button data-pf="${k}" class="${cl} ${k === CF.pf ? "on" : ""}">${t}<small>${n}</small></button>`).join("")}</div>
       <input id="cq" class="cq" placeholder="🔍 שם / טלפון / 4 ספרות / הזמנה / מייל" value="${esc(CF.q)}">
       <div class="seg" id="cr">${[["1", "היום"], ["w", "השבוע"], ["m", "החודש"], ["c", "📅 טווח תאריכים"], ["", "הכל"]].map(([k, t]) => `<button data-cr="${k}" class="${k === CF.r ? "on" : ""}">${t}</button>`).join("")}</div>
