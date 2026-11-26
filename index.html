@@ -968,6 +968,8 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,
 .ibout{display:flex;align-items:center;gap:8px;margin:8px 0;padding:6px 12px;border-inline-start:3px solid #16a34a;background:color-mix(in srgb,#16a34a 8%,transparent);border-radius:8px;font-size:13px}
 .ibm.aft{border-inline-start:3px solid #f59e0b;padding-inline-start:9px}
 .fsw button.fret.on{border-color:#b45309;background:#fef3c7;color:#b45309}
+.fsw button.fpaid.on{border-color:#15803d;background:#dcfce7;color:#15803d}
+.kd-paidc{background:#dcfce7;color:#15803d}
 .cnt.ret{background:#fef3c7;color:#b45309;margin-inline-start:4px}
 .ibpay{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0;padding:7px 12px;border-radius:10px;background:color-mix(in srgb,var(--line) 30%,transparent);font-size:13px}
 .ibsort{display:flex;gap:4px}.ibsort button{border:1px solid var(--line);background:transparent;border-radius:9px;padding:6px 10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:inherit}
@@ -1709,12 +1711,13 @@ function inboxGroups(){
     const answeredAt = rs.reduce((m, r) => r.replied_at && r.replied_at > m ? r.replied_at : m, "");
     const returned = !!op.length && !!answeredAt && op.some(r => r.at > answeredAt);
     const state = op.length ? (returned ? "returned" : "open") : answeredAt ? "answered" : "handled";
-    return { k, rs, c, op, last: rs[0], answeredAt, returned, state, kind: (op[0] || rs[0]).kind || "other", name: c ? c.name : (rs[0].from_email || "לא שויך") }; })
+    const paid = !!(c && paidC(c));   // already paid -> keep out of the chase queue, show in its own section
+    return { k, rs, c, op, last: rs[0], answeredAt, returned, state, paid, kind: (op[0] || rs[0]).kind || "other", name: c ? c.name : (rs[0].from_email || "לא שויך") }; })
     .sort((a, b) => (b.returned - a.returned) || b.last.at.localeCompare(a.last.at));
 }
 function inboxCount(){
   const b = $("#inbN"); if (!b) return;
-  const g = inboxGroups(), waiting = g.filter(x => x.state === "open").length, returned = g.filter(x => x.returned).length;   // waiting = never answered · returned shown separately
+  const g = inboxGroups(), waiting = g.filter(x => x.state === "open" && !x.paid).length, returned = g.filter(x => x.returned && !x.paid).length;   // waiting excludes customers who already paid
   b.textContent = waiting; b.classList.toggle("hide", !waiting);
   const br = $("#inbR"); if (br) { br.textContent = "🔁 " + returned; br.classList.toggle("hide", !returned); }
 }
@@ -1801,12 +1804,15 @@ function inbox(){
       : d.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); };
   const ALL = inboxGroups();   // same grouping + state the nav badge uses
   const today = new Date().toDateString();
-  const n = { open: ALL.filter(g => g.state === "open").length, returned: ALL.filter(g => g.returned).length,
+  // paid customers who wrote in are pulled OUT of waiting/returned into their own 💰 section (no point chasing them)
+  const n = { open: ALL.filter(g => g.state === "open" && !g.paid).length, returned: ALL.filter(g => g.returned && !g.paid).length,
+    paid: ALL.filter(g => g.paid && g.op.length).length,
     answered: ALL.filter(g => g.state === "answered").length, handled: ALL.filter(g => g.state === "handled").length,
     all: ALL.length, nomatch: ALL.filter(g => !g.c).length };
   if (IF === "returned" && !n.returned) IF = "open";   // nothing came back after a reply: don't sit on an empty tab
-  const inF = g => IF === "open" ? g.state === "open" : IF === "returned" ? g.returned : IF === "answered" ? g.state === "answered"
-    : IF === "handled" ? g.state === "handled" : IF === "done" ? !g.op.length : IF === "nomatch" ? !g.c : true;
+  if (IF === "paid" && !n.paid) IF = "open";           // no paid customer is still open: don't sit on an empty tab
+  const inF = g => IF === "open" ? (g.state === "open" && !g.paid) : IF === "returned" ? (g.returned && !g.paid) : IF === "paid" ? (g.paid && g.op.length)
+    : IF === "answered" ? g.state === "answered" : IF === "handled" ? g.state === "handled" : IF === "done" ? !g.op.length : IF === "nomatch" ? !g.c : true;
   const q = IQ.trim().toLowerCase();
   const hit = g => !q || [g.name, g.c && local(g.c.phone), g.c && g.c.phone, g.c && g.c.email, g.last.from_email,
     ...(g.c && g.c.orders || []).map(o => o.order), ...g.rs.map(r => r.snippet)].some(v => v && String(v).toLowerCase().includes(q));
@@ -1818,7 +1824,7 @@ function inbox(){
   const kchip = k => `<span class="kd kd-${k}">${esc((RK[k] || RK.other)[0])}</span>`;
   const row = g => `<button class="ibr ${g.k === IG ? "on" : ""} ${g.op.length ? (g.returned ? "ret" : "") : "done"}" data-ig="${esc(g.k)}">
       <span class="r1"><b>${esc(g.name)}</b>${g.rs.length > 1 ? `<span class="nn">${g.rs.length}</span>` : ""}<span class="sp"></span><span class="mute">${when(g.last.at)}</span></span>
-      <span class="r2">${kchip(g.kind)}${g.returned ? `<span class="kd kd-ret">🔁 חזר אחרי תשובה</span>` : ""}${isStopped(g.c) ? `<span class="kd kd-stop">🔕 כבוי</span>` : ""}${isCS(g.c) ? `<span class="kd kd-csf">📞 בשירות לקוחות</span>` : ""}${g.state === "answered" ? `<span class="kd kd-ok">✉️ נענה</span>` : g.state === "handled" ? `<span class="kd">✓ טופל ידנית</span>` : ""}${g.c ? `<span class="mute">${esc(g.c.total)}</span>` : ""}</span>
+      <span class="r2">${kchip(g.kind)}${g.returned ? `<span class="kd kd-ret">🔁 חזר אחרי תשובה</span>` : ""}${isStopped(g.c) ? `<span class="kd kd-stop">🔕 כבוי</span>` : ""}${isCS(g.c) ? `<span class="kd kd-csf">📞 בשירות לקוחות</span>` : ""}${g.paid ? `<span class="kd kd-paidc">💰 שילם</span>` : ""}${g.state === "answered" ? `<span class="kd kd-ok">✉️ נענה</span>` : g.state === "handled" ? `<span class="kd">✓ טופל ידנית</span>` : ""}${g.c ? `<span class="mute">${esc(g.c.total)}</span>` : ""}</span>
       <span class="r3">${esc((g.last.snippet || "(אין טקסט)").replace(/\s+/g, " ").slice(0, 90))}</span></button>`;
   const detail = g => { if (!g) return `<div class="card empty ibe"><div class="big">👈</div>לבחור לקוח מהרשימה כדי לראות מה כתב ומה לענות.</div>`;
     const c = g.c, top = g.op[0] || g.last, k = RK[top.kind] || RK.other;
@@ -1859,15 +1865,15 @@ function inbox(){
     </div>`; };
   $("#vInbox").innerHTML = `<div class="card ibtop">
       <div class="ibt"><h2>📥 תשובות מלקוחות</h2>
-        <div class="ibst"><span><b>${n.open}</b> מחכים לתשובה</span>${n.returned ? `<span><b>${n.returned}</b> 🔁 חזרו אחרי תשובה</span>` : ""}<span><b>${n.answered}</b> נענו</span><span><b>${REPLIES.filter(r => new Date(r.at).toDateString() === today).length}</b> הודעות היום</span><span><b>${n.nomatch}</b> לא שויכו</span></div></div>
-      <div class="ibf"><div class="fsw">${[["open", "⏳ מחכים (לא ענינו)", n.open], ...(n.returned ? [["returned", "🔁 חזרו אחרי תשובה", n.returned]] : []), ["answered", "✉️ נענו", n.answered], ["handled", "✓ טופלו ידנית", n.handled], ["all", "הכל", n.all], ["nomatch", "לא שויכו", n.nomatch]].map(([v, t, x]) => `<button class="${IF === v ? "on" : ""} ${v === "returned" ? "fret" : ""}" data-if="${v}">${t} (${x})</button>`).join("")}</div>
+        <div class="ibst"><span><b>${n.open}</b> מחכים לתשובה</span>${n.returned ? `<span><b>${n.returned}</b> 🔁 חזרו אחרי תשובה</span>` : ""}${n.paid ? `<span><b>${n.paid}</b> 💰 שילמו</span>` : ""}<span><b>${n.answered}</b> נענו</span><span><b>${REPLIES.filter(r => new Date(r.at).toDateString() === today).length}</b> הודעות היום</span><span><b>${n.nomatch}</b> לא שויכו</span></div></div>
+      <div class="ibf"><div class="fsw">${[["open", "⏳ מחכים (לא ענינו)", n.open], ...(n.returned ? [["returned", "🔁 חזרו אחרי תשובה", n.returned]] : []), ...(n.paid ? [["paid", "💰 שילמו", n.paid]] : []), ["answered", "✉️ נענו", n.answered], ["handled", "✓ טופלו ידנית", n.handled], ["all", "הכל", n.all], ["nomatch", "לא שויכו", n.nomatch]].map(([v, t, x]) => `<button class="${IF === v ? "on" : ""} ${v === "returned" ? "fret" : ""} ${v === "paid" ? "fpaid" : ""}" data-if="${v}">${t} (${x})</button>`).join("")}</div>
         <input id="ibq" type="search" placeholder="🔎 חיפוש: שם, טלפון, מייל, הזמנה או טקסט" value="${esc(IQ)}">
         <div class="ibsort">${[["new", "🕐 אחרון"], ["amount", "💰 חוב גבוה"]].map(([v, t]) => `<button class="${IS === v ? "on" : ""}" data-is="${v}">${t}</button>`).join("")}</div></div>
       <div class="ibk"><button class="kf ${IK ? "" : "on"}" data-ik="">כל הסוגים</button>${Object.entries(RK).filter(([v]) => kc[v]).map(([v, x]) => `<button class="kf ${IK === v ? "on" : ""}" data-ik="${v}">${x[0]} · ${kc[v]}</button>`).join("")}</div>
       <div class="hint">השרת בודק כל 15 דקות. תשובה של לקוח לא עוצרת את הטיימר; כדי לעצור הודעות ללקוח: 🔕 בתוך הכרטיס שלו.</div>
     </div>
     <div class="ibx ${G ? "sel" : ""}">
-      <div class="ibl">${list.map(row).join("") || `<div class="card empty"><div class="big">📭</div>${q || IK ? "אין תוצאות לחיפוש הזה." : IF === "open" ? "אין תשובות שמחכות לטיפול." : IF === "returned" ? "אף אחד לא חזר אחרי שענינו לו." : "אין תשובות."}</div>`}</div>
+      <div class="ibl">${list.map(row).join("") || `<div class="card empty"><div class="big">📭</div>${q || IK ? "אין תוצאות לחיפוש הזה." : IF === "open" ? "אין תשובות שמחכות לטיפול." : IF === "returned" ? "אף אחד לא חזר אחרי שענינו לו." : IF === "paid" ? "אין לקוחות ששילמו וממתינים כאן." : "אין תשובות."}</div>`}</div>
       <div class="ibp">${detail(G)}</div>
     </div>`;
   const V = $("#vInbox");
