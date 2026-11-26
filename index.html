@@ -969,6 +969,9 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,
 .ibm.aft{border-inline-start:3px solid #f59e0b;padding-inline-start:9px}
 .fsw button.fret.on{border-color:#b45309;background:#fef3c7;color:#b45309}
 .cnt.ret{background:#fef3c7;color:#b45309;margin-inline-start:4px}
+.ibpay{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0;padding:7px 12px;border-radius:10px;background:color-mix(in srgb,var(--line) 30%,transparent);font-size:13px}
+.ibsort{display:flex;gap:4px}.ibsort button{border:1px solid var(--line);background:transparent;border-radius:9px;padding:6px 10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:inherit}
+.ibsort button.on{border-color:var(--acc);background:var(--accbg);color:var(--acc)}
 /* 📥 page, organised (18.11.2026): summary + filters on top, one line per customer, details on the side */
 .ibtop .ibt{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}.ibtop h2{margin:0}
 .ibst{display:flex;flex-wrap:wrap;gap:6px}.ibst span{background:color-mix(in srgb,var(--line) 40%,transparent);border-radius:99px;padding:3px 10px;font-size:13px}.ibst b{font-size:15px}
@@ -1791,7 +1794,7 @@ document.addEventListener("click", e => {
 });
 
 // ---------- the 📥 page: one line per customer (all their replies together), filters + search on top, details on the side ----------
-let IG = null, IK = "", IQ = "";
+let IG = null, IK = "", IQ = "", IS = "new";   // IS: list order — "new" (recent/returned-first) or "amount" (biggest debt first)
 function inbox(){
   const when = iso => { const d = new Date(iso), t = new Date();
     return d.toDateString() === t.toDateString() ? "היום " + d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
@@ -1807,7 +1810,8 @@ function inbox(){
   const q = IQ.trim().toLowerCase();
   const hit = g => !q || [g.name, g.c && local(g.c.phone), g.c && g.c.phone, g.c && g.c.email, g.last.from_email,
     ...(g.c && g.c.orders || []).map(o => o.order), ...g.rs.map(r => r.snippet)].some(v => v && String(v).toLowerCase().includes(q));
-  const base = ALL.filter(inF).filter(hit), list = IK ? base.filter(g => g.kind === IK) : base;
+  const base = ALL.filter(inF).filter(hit), list0 = IK ? base.filter(g => g.kind === IK) : base;
+  const list = IS === "amount" ? [...list0].sort((a, b) => (b.returned - a.returned) || ((b.c ? +b.c.amount || 0 : 0) - (a.c ? +a.c.amount || 0 : 0))) : list0;
   const kc = {}; base.forEach(g => kc[g.kind] = (kc[g.kind] || 0) + 1);
   if (IG && !ALL.some(g => g.k === IG)) IG = null;
   const G = ALL.find(g => g.k === IG);
@@ -1818,6 +1822,7 @@ function inbox(){
       <span class="r3">${esc((g.last.snippet || "(אין טקסט)").replace(/\s+/g, " ").slice(0, 90))}</span></button>`;
   const detail = g => { if (!g) return `<div class="card empty ibe"><div class="big">👈</div>לבחור לקוח מהרשימה כדי לראות מה כתב ומה לענות.</div>`;
     const c = g.c, top = g.op[0] || g.last, k = RK[top.kind] || RK.other;
+    const pi = c ? payInfo(c) : { net: 0, last: null };   // money picture: did this customer actually pay anything?
     const rep = c && k[1] ? emailReplies(c).find(x => x[0].startsWith(k[1])) : null;
     const sug = !c ? `<div class="mute">לא שויך ללקוח בוודאות (כתובת לא מוכרת או כמה לקוחות). לפתוח ב-Gmail ולבדוק ידנית.</div>`
       : rep ? `${rep[2] ? `<img class="shot" src="${rep[2]}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${rep[2]}"><button class="btn sm" data-img="${rep[2]}">העתק תמונה</button>` : ""}<pre>${esc(rep[1])}</pre>
@@ -1831,8 +1836,9 @@ function inbox(){
     return `<div class="card ibd">
       <div class="ibh"><button class="btn sm ibback" data-ig="">→ לרשימה</button>
         <h2>${esc(g.name)}</h2>${c ? `<span class="mute">${esc(c.total)}${c.kind === "sub" ? " · מנוי" : ""} · ${(c.orders || []).map(o => esc(o.order)).join(", ")}</span>` : ""}</div>
-      <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(g.last.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>
+      <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(g.last.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>${c && c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}
         ${g.op.length ? `<button class="btn sm p" data-iball="${esc(g.k)}">✓ סמן הכל כטופל (${g.op.length})</button>` : ""}</div>
+      ${c ? `<div class="ibpay"><span class="mute">חוב <b>${esc(c.total)}</b></span>${pi.net > 0 ? `<span class="chip ok">💰 שולם ${ils(pi.net)}${paidC(c) ? " · אומת" : ""}</span>` : `<span class="chip warn">⚠️ אין תשלום רשום</span>`}${top.kind === "paid" && pi.net <= 0 ? `<span class="mute">— הלקוח טוען ששילם אבל אין רישום. לבקש אסמכתא לפני סגירה.</span>` : ""}${top.kind === "paid" && pi.net > 0 ? `<span class="mute">— הטענה "כבר שילמתי" מגובה ברישום תשלום.</span>` : ""}</div>` : ""}
       ${stopBox(c)}${csBox(c)}
       <h3>💬 מה לענות${g.op.length ? (g.returned ? " · 🔁 חזר אחרי שנענה" : "") : g.state === "answered" ? " (כבר נענה)" : " (טופל ידנית)"}: ${esc(k[0])}</h3>
       <div class="ibs">${sug}</div>
@@ -1855,7 +1861,8 @@ function inbox(){
       <div class="ibt"><h2>📥 תשובות מלקוחות</h2>
         <div class="ibst"><span><b>${n.open}</b> מחכים לתשובה</span>${n.returned ? `<span><b>${n.returned}</b> 🔁 חזרו אחרי תשובה</span>` : ""}<span><b>${n.answered}</b> נענו</span><span><b>${REPLIES.filter(r => new Date(r.at).toDateString() === today).length}</b> הודעות היום</span><span><b>${n.nomatch}</b> לא שויכו</span></div></div>
       <div class="ibf"><div class="fsw">${[["open", "⏳ מחכים (לא ענינו)", n.open], ...(n.returned ? [["returned", "🔁 חזרו אחרי תשובה", n.returned]] : []), ["answered", "✉️ נענו", n.answered], ["handled", "✓ טופלו ידנית", n.handled], ["all", "הכל", n.all], ["nomatch", "לא שויכו", n.nomatch]].map(([v, t, x]) => `<button class="${IF === v ? "on" : ""} ${v === "returned" ? "fret" : ""}" data-if="${v}">${t} (${x})</button>`).join("")}</div>
-        <input id="ibq" type="search" placeholder="🔎 חיפוש: שם, טלפון, מייל, הזמנה או טקסט" value="${esc(IQ)}"></div>
+        <input id="ibq" type="search" placeholder="🔎 חיפוש: שם, טלפון, מייל, הזמנה או טקסט" value="${esc(IQ)}">
+        <div class="ibsort">${[["new", "🕐 אחרון"], ["amount", "💰 חוב גבוה"]].map(([v, t]) => `<button class="${IS === v ? "on" : ""}" data-is="${v}">${t}</button>`).join("")}</div></div>
       <div class="ibk"><button class="kf ${IK ? "" : "on"}" data-ik="">כל הסוגים</button>${Object.entries(RK).filter(([v]) => kc[v]).map(([v, x]) => `<button class="kf ${IK === v ? "on" : ""}" data-ik="${v}">${x[0]} · ${kc[v]}</button>`).join("")}</div>
       <div class="hint">השרת בודק כל 15 דקות. תשובה של לקוח לא עוצרת את הטיימר; כדי לעצור הודעות ללקוח: 🔕 בתוך הכרטיס שלו.</div>
     </div>
@@ -1866,6 +1873,7 @@ function inbox(){
   const V = $("#vInbox");
   V.querySelectorAll("[data-if]").forEach(b => b.onclick = () => { IF = b.dataset.if; IK = ""; try { localStorage.setItem("inboxF", IF); } catch (e) {} inbox(); });
   V.querySelectorAll("[data-ik]").forEach(b => b.onclick = () => { IK = b.dataset.ik; inbox(); });
+  V.querySelectorAll("[data-is]").forEach(b => b.onclick = () => { IS = b.dataset.is; inbox(); });
   V.querySelectorAll("[data-ig]").forEach(b => b.onclick = () => { IG = b.dataset.ig || null; inbox(); if (IG && matchMedia("(max-width:900px)").matches) V.scrollIntoView(); });
   const qi = $("#ibq"); qi.oninput = () => { IQ = qi.value; const at = qi.selectionStart; inbox(); const n2 = $("#ibq"); n2.focus(); n2.setSelectionRange(at, at); };
   V.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
