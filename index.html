@@ -964,6 +964,14 @@ button.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,22,40,
 .ib1{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.ib1 select{font:inherit;font-size:13px;padding:3px 6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:inherit}
 .ib-txt{white-space:pre-wrap;margin:10px 0;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--line) 35%,transparent);font-size:14px;max-height:180px;overflow:auto}
 .ib-sug{margin:6px 0 10px}.ib.done{opacity:.6}.ib-k{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+/* thread + returned (26.11): our outgoing reply marker, replies that came after it, the returned filter tab and nav badge */
+.ibout{display:flex;align-items:center;gap:8px;margin:8px 0;padding:6px 12px;border-inline-start:3px solid #16a34a;background:color-mix(in srgb,#16a34a 8%,transparent);border-radius:8px;font-size:13px}
+.ibm.aft{border-inline-start:3px solid #f59e0b;padding-inline-start:9px}
+.fsw button.fret.on{border-color:#b45309;background:#fef3c7;color:#b45309}
+.cnt.ret{background:#fef3c7;color:#b45309;margin-inline-start:4px}
+.ibpay{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0;padding:7px 12px;border-radius:10px;background:color-mix(in srgb,var(--line) 30%,transparent);font-size:13px}
+.ibsort{display:flex;gap:4px}.ibsort button{border:1px solid var(--line);background:transparent;border-radius:9px;padding:6px 10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:inherit}
+.ibsort button.on{border-color:var(--acc);background:var(--accbg);color:var(--acc)}
 /* 📥 page, organised (18.11.2026): summary + filters on top, one line per customer, details on the side */
 .ibtop .ibt{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}.ibtop h2{margin:0}
 .ibst{display:flex;flex-wrap:wrap;gap:6px}.ibst span{background:color-mix(in srgb,var(--line) 40%,transparent);border-radius:99px;padding:3px 10px;font-size:13px}.ibst b{font-size:15px}
@@ -1247,7 +1255,7 @@ header .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255
       <div class="ng wa"><div class="nb">
         <button class="tab" data-v="all">💬 וואטסאפ</button></div></div>
       <div class="ng em"><div class="nb">
-        <button class="tab" data-v="track">📧 מייל</button><button class="tab" data-v="inbox">📥 תשובות <span class="cnt hide" id="inbN"></span></button><button class="tab" data-v="sms">📱 SMS</button></div></div>
+        <button class="tab" data-v="track">📧 מייל</button><button class="tab" data-v="inbox">📥 תשובות <span class="cnt hide" id="inbN"></span><span class="cnt ret hide" id="inbR" title="חזרו אחרי שענינו"></span></button><button class="tab" data-v="sms">📱 SMS</button></div></div>
       <div class="ng"><div class="nb">
         <button class="tab" data-v="log">📋 יומן</button><button class="tab" data-v="pay">עמלות ושכר</button></div></div>
     </nav>
@@ -1690,9 +1698,25 @@ const RK = {
   other:   ["לבדיקה ידנית", null],
 };
 const GMSG = id => `https://mail.google.com/mail/?authuser=collections@try-smiley.com#search/${encodeURIComponent("rfc822msgid:" + String(id || "").replace(/[<>]/g, ""))}`;
+// group all replies by customer and work out each one's state. Shared by the 📥 page and the nav badge so both agree.
+// state: open = unhandled, we never answered · returned = we answered and the customer wrote AGAIN · answered = we replied, nothing new · handled = marked ✓ by hand
+function inboxGroups(){
+  const caseOf = r => r.phone && ALLCASES.find(c => c.phone === r.phone);
+  const map = new Map();
+  REPLIES.forEach(r => { const k = r.phone || "e:" + (r.from_email || r.id); if (!map.has(k)) map.set(k, []); map.get(k).push(r); });
+  return [...map].map(([k, rs]) => { rs.sort((a, b) => b.at.localeCompare(a.at));
+    const c = caseOf(rs[0]), op = rs.filter(r => !r.handled_at);
+    const answeredAt = rs.reduce((m, r) => r.replied_at && r.replied_at > m ? r.replied_at : m, "");
+    const returned = !!op.length && !!answeredAt && op.some(r => r.at > answeredAt);
+    const state = op.length ? (returned ? "returned" : "open") : answeredAt ? "answered" : "handled";
+    return { k, rs, c, op, last: rs[0], answeredAt, returned, state, kind: (op[0] || rs[0]).kind || "other", name: c ? c.name : (rs[0].from_email || "לא שויך") }; })
+    .sort((a, b) => (b.returned - a.returned) || b.last.at.localeCompare(a.last.at));
+}
 function inboxCount(){
-  const n = new Set(REPLIES.filter(r => !r.handled_at).map(r => r.phone || "e:" + (r.from_email || r.id))).size, b = $("#inbN"); if (!b) return;   // customers waiting, same as the page
-  b.textContent = n; b.classList.toggle("hide", !n);
+  const b = $("#inbN"); if (!b) return;
+  const g = inboxGroups(), waiting = g.filter(x => x.state === "open").length, returned = g.filter(x => x.returned).length;   // waiting = never answered · returned shown separately
+  b.textContent = waiting; b.classList.toggle("hide", !waiting);
+  const br = $("#inbR"); if (br) { br.textContent = "🔁 " + returned; br.classList.toggle("hide", !returned); }
 }
 // 🔕 stop future messages for one customer (18.11.2026, GUI only): puts the 📧 email and 📱 SMS flows on "בבדיקה/המתנה",
 // the status the timer already skips (send.js: waiting). No new server code. A flow that is already "סגור" stays closed.
@@ -1770,32 +1794,24 @@ document.addEventListener("click", e => {
 });
 
 // ---------- the 📥 page: one line per customer (all their replies together), filters + search on top, details on the side ----------
-let IG = null, IK = "", IQ = "";
+let IG = null, IK = "", IQ = "", IS = "new";   // IS: list order — "new" (recent/returned-first) or "amount" (biggest debt first)
 function inbox(){
-  const caseOf = r => r.phone && ALLCASES.find(c => c.phone === r.phone);
   const when = iso => { const d = new Date(iso), t = new Date();
     return d.toDateString() === t.toDateString() ? "היום " + d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
       : d.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); };
-  const map = new Map();
-  REPLIES.forEach(r => { const k = r.phone || "e:" + (r.from_email || r.id); if (!map.has(k)) map.set(k, []); map.get(k).push(r); });
-  const ALL = [...map].map(([k, rs]) => { rs.sort((a, b) => b.at.localeCompare(a.at));
-    const c = caseOf(rs[0]), op = rs.filter(r => !r.handled_at);
-    // answered = a reply was SENT from the dashboard (replied_at). handled-by-hand = marked ✓ without sending a reply.
-    const answeredAt = rs.reduce((m, r) => r.replied_at && r.replied_at > m ? r.replied_at : m, "");
-    const returned = !!op.length && !!answeredAt && op.some(r => r.at > answeredAt);   // customer wrote AGAIN after we answered
-    const state = op.length ? (returned ? "returned" : "open") : answeredAt ? "answered" : "handled";
-    return { k, rs, c, op, last: rs[0], answeredAt, returned, state, kind: (op[0] || rs[0]).kind || "other", name: c ? c.name : (rs[0].from_email || "לא שויך") }; })
-    .sort((a, b) => (b.returned - a.returned) || b.last.at.localeCompare(a.last.at));   // conversations that came back after an answer float to the top
+  const ALL = inboxGroups();   // same grouping + state the nav badge uses
   const today = new Date().toDateString();
-  const n = { open: ALL.filter(g => g.op.length).length, returned: ALL.filter(g => g.returned).length,
+  const n = { open: ALL.filter(g => g.state === "open").length, returned: ALL.filter(g => g.returned).length,
     answered: ALL.filter(g => g.state === "answered").length, handled: ALL.filter(g => g.state === "handled").length,
     all: ALL.length, nomatch: ALL.filter(g => !g.c).length };
-  const inF = g => IF === "open" ? g.op.length : IF === "returned" ? g.returned : IF === "answered" ? g.state === "answered"
+  if (IF === "returned" && !n.returned) IF = "open";   // nothing came back after a reply: don't sit on an empty tab
+  const inF = g => IF === "open" ? g.state === "open" : IF === "returned" ? g.returned : IF === "answered" ? g.state === "answered"
     : IF === "handled" ? g.state === "handled" : IF === "done" ? !g.op.length : IF === "nomatch" ? !g.c : true;
   const q = IQ.trim().toLowerCase();
   const hit = g => !q || [g.name, g.c && local(g.c.phone), g.c && g.c.phone, g.c && g.c.email, g.last.from_email,
     ...(g.c && g.c.orders || []).map(o => o.order), ...g.rs.map(r => r.snippet)].some(v => v && String(v).toLowerCase().includes(q));
-  const base = ALL.filter(inF).filter(hit), list = IK ? base.filter(g => g.kind === IK) : base;
+  const base = ALL.filter(inF).filter(hit), list0 = IK ? base.filter(g => g.kind === IK) : base;
+  const list = IS === "amount" ? [...list0].sort((a, b) => (b.returned - a.returned) || ((b.c ? +b.c.amount || 0 : 0) - (a.c ? +a.c.amount || 0 : 0))) : list0;
   const kc = {}; base.forEach(g => kc[g.kind] = (kc[g.kind] || 0) + 1);
   if (IG && !ALL.some(g => g.k === IG)) IG = null;
   const G = ALL.find(g => g.k === IG);
@@ -1806,6 +1822,7 @@ function inbox(){
       <span class="r3">${esc((g.last.snippet || "(אין טקסט)").replace(/\s+/g, " ").slice(0, 90))}</span></button>`;
   const detail = g => { if (!g) return `<div class="card empty ibe"><div class="big">👈</div>לבחור לקוח מהרשימה כדי לראות מה כתב ומה לענות.</div>`;
     const c = g.c, top = g.op[0] || g.last, k = RK[top.kind] || RK.other;
+    const pi = c ? payInfo(c) : { net: 0, last: null };   // money picture: did this customer actually pay anything?
     const rep = c && k[1] ? emailReplies(c).find(x => x[0].startsWith(k[1])) : null;
     const sug = !c ? `<div class="mute">לא שויך ללקוח בוודאות (כתובת לא מוכרת או כמה לקוחות). לפתוח ב-Gmail ולבדוק ידנית.</div>`
       : rep ? `${rep[2] ? `<img class="shot" src="${rep[2]}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${rep[2]}"><button class="btn sm" data-img="${rep[2]}">העתק תמונה</button>` : ""}<pre>${esc(rep[1])}</pre>
@@ -1819,34 +1836,44 @@ function inbox(){
     return `<div class="card ibd">
       <div class="ibh"><button class="btn sm ibback" data-ig="">→ לרשימה</button>
         <h2>${esc(g.name)}</h2>${c ? `<span class="mute">${esc(c.total)}${c.kind === "sub" ? " · מנוי" : ""} · ${(c.orders || []).map(o => esc(o.order)).join(", ")}</span>` : ""}</div>
-      <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(g.last.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>
+      <div class="btns">${c ? `<button class="btn sm" data-ibo="${c.phone}">📂 פתח תיק</button>` : ""}<a class="btn sm" href="${GMSG(g.last.msg_id)}" target="_blank">📬 פתח ב-Gmail</a>${c && c.payment_link ? `<button class="btn sm" data-copy="${esc(c.payment_link)}">🔗 העתק קישור תשלום</button>` : ""}
         ${g.op.length ? `<button class="btn sm p" data-iball="${esc(g.k)}">✓ סמן הכל כטופל (${g.op.length})</button>` : ""}</div>
+      ${c ? `<div class="ibpay"><span class="mute">חוב <b>${esc(c.total)}</b></span>${pi.net > 0 ? `<span class="chip ok">💰 שולם ${ils(pi.net)}${paidC(c) ? " · אומת" : ""}</span>` : `<span class="chip warn">⚠️ אין תשלום רשום</span>`}${top.kind === "paid" && pi.net <= 0 ? `<span class="mute">— הלקוח טוען ששילם אבל אין רישום. לבקש אסמכתא לפני סגירה.</span>` : ""}${top.kind === "paid" && pi.net > 0 ? `<span class="mute">— הטענה "כבר שילמתי" מגובה ברישום תשלום.</span>` : ""}</div>` : ""}
       ${stopBox(c)}${csBox(c)}
       <h3>💬 מה לענות${g.op.length ? (g.returned ? " · 🔁 חזר אחרי שנענה" : "") : g.state === "answered" ? " (כבר נענה)" : " (טופל ידנית)"}: ${esc(k[0])}</h3>
       <div class="ibs">${sug}</div>
-      <h3>✉️ מה הלקוח כתב (${g.rs.length})</h3>
-      ${g.rs.map(r => `<div class="ibm ${r.handled_at ? "done" : ""}">
-        <div class="ib1"><span class="mute">${when(r.at)}</span>
-          <select data-rk="${r.id}" title="סוג הפנייה (אפשר לשנות)">${Object.entries(RK).map(([v, x]) => `<option value="${v}" ${v === r.kind ? "selected" : ""}>${x[0]}</option>`).join("")}</select>
-          <span class="sp"></span>${r.handled_at ? `<span class="chip ok">✓ טופל${r.handled_by ? " · " + esc(r.handled_by) : ""}</span>` : ""}
-          <button class="btn sm ${r.handled_at ? "" : "p"}" data-ibh="${r.id}" data-to="${r.handled_at ? "0" : "1"}">${r.handled_at ? "↩ לא טופל" : "✓ טופל"}</button></div>
-        <div class="ib-txt">${esc(r.snippet || "(אין טקסט, אולי רק תמונה או קובץ מצורף)")}</div></div>`).join("")}
+      <h3>✉️ ההתכתבות לפי הסדר · ${g.rs.length} מהלקוח${g.answeredAt ? " · ענינו " + when(g.answeredAt) : ""}</h3>
+      ${(() => {
+        const outs = {}; g.rs.forEach(r => { if (r.replied_at) outs[r.replied_at] = r.replied_by || ""; });   // where we sent a reply
+        const items = [...g.rs.map(r => ({ t: "in", at: r.at, r })), ...Object.entries(outs).map(([at, by]) => ({ t: "out", at, by }))]
+          .sort((a, b) => a.at.localeCompare(b.at));   // oldest first = thread order
+        return items.map(it => it.t === "out"
+          ? `<div class="ibout"><span class="kd kd-ok">✉️ שלחנו תשובה</span><span class="mute">${when(it.at)}${it.by ? " · " + esc(it.by) : ""}</span></div>`
+          : (r => `<div class="ibm ${r.handled_at ? "done" : ""}${g.answeredAt && r.at > g.answeredAt ? " aft" : ""}">
+            <div class="ib1"><span class="mute">${when(r.at)}</span>${g.answeredAt && r.at > g.answeredAt ? `<span class="kd kd-ret">🔁 אחרי התשובה</span>` : ""}
+              <select data-rk="${r.id}" title="סוג הפנייה (אפשר לשנות)">${Object.entries(RK).map(([v, x]) => `<option value="${v}" ${v === r.kind ? "selected" : ""}>${x[0]}</option>`).join("")}</select>
+              <span class="sp"></span>${r.handled_at ? `<span class="chip ok">✓ טופל${r.handled_by ? " · " + esc(r.handled_by) : ""}</span>` : ""}
+              <button class="btn sm ${r.handled_at ? "" : "p"}" data-ibh="${r.id}" data-to="${r.handled_at ? "0" : "1"}">${r.handled_at ? "↩ לא טופל" : "✓ טופל"}</button></div>
+            <div class="ib-txt">${esc(r.snippet || "(אין טקסט, אולי רק תמונה או קובץ מצורף)")}</div></div>`)(it.r)).join("");
+      })()}
     </div>`; };
   $("#vInbox").innerHTML = `<div class="card ibtop">
       <div class="ibt"><h2>📥 תשובות מלקוחות</h2>
         <div class="ibst"><span><b>${n.open}</b> מחכים לתשובה</span>${n.returned ? `<span><b>${n.returned}</b> 🔁 חזרו אחרי תשובה</span>` : ""}<span><b>${n.answered}</b> נענו</span><span><b>${REPLIES.filter(r => new Date(r.at).toDateString() === today).length}</b> הודעות היום</span><span><b>${n.nomatch}</b> לא שויכו</span></div></div>
-      <div class="ibf"><div class="fsw">${[["open", "מחכים", n.open], ["answered", "✉️ נענו", n.answered], ["handled", "✓ טופלו ידנית", n.handled], ["all", "הכל", n.all], ["nomatch", "לא שויכו", n.nomatch]].map(([v, t, x]) => `<button class="${IF === v ? "on" : ""}" data-if="${v}">${t} (${x})</button>`).join("")}</div>
-        <input id="ibq" type="search" placeholder="🔎 חיפוש: שם, טלפון, מייל, הזמנה או טקסט" value="${esc(IQ)}"></div>
+      <div class="ibf"><div class="fsw">${[["open", "⏳ מחכים (לא ענינו)", n.open], ...(n.returned ? [["returned", "🔁 חזרו אחרי תשובה", n.returned]] : []), ["answered", "✉️ נענו", n.answered], ["handled", "✓ טופלו ידנית", n.handled], ["all", "הכל", n.all], ["nomatch", "לא שויכו", n.nomatch]].map(([v, t, x]) => `<button class="${IF === v ? "on" : ""} ${v === "returned" ? "fret" : ""}" data-if="${v}">${t} (${x})</button>`).join("")}</div>
+        <input id="ibq" type="search" placeholder="🔎 חיפוש: שם, טלפון, מייל, הזמנה או טקסט" value="${esc(IQ)}">
+        <div class="ibsort">${[["new", "🕐 אחרון"], ["amount", "💰 חוב גבוה"]].map(([v, t]) => `<button class="${IS === v ? "on" : ""}" data-is="${v}">${t}</button>`).join("")}</div></div>
       <div class="ibk"><button class="kf ${IK ? "" : "on"}" data-ik="">כל הסוגים</button>${Object.entries(RK).filter(([v]) => kc[v]).map(([v, x]) => `<button class="kf ${IK === v ? "on" : ""}" data-ik="${v}">${x[0]} · ${kc[v]}</button>`).join("")}</div>
       <div class="hint">השרת בודק כל 15 דקות. תשובה של לקוח לא עוצרת את הטיימר; כדי לעצור הודעות ללקוח: 🔕 בתוך הכרטיס שלו.</div>
     </div>
     <div class="ibx ${G ? "sel" : ""}">
-      <div class="ibl">${list.map(row).join("") || `<div class="card empty"><div class="big">📭</div>${q || IK ? "אין תוצאות לחיפוש הזה." : IF === "open" ? "אין תשובות שמחכות לטיפול." : "אין תשובות."}</div>`}</div>
+      <div class="ibl">${list.map(row).join("") || `<div class="card empty"><div class="big">📭</div>${q || IK ? "אין תוצאות לחיפוש הזה." : IF === "open" ? "אין תשובות שמחכות לטיפול." : IF === "returned" ? "אף אחד לא חזר אחרי שענינו לו." : "אין תשובות."}</div>`}</div>
       <div class="ibp">${detail(G)}</div>
     </div>`;
   const V = $("#vInbox");
   V.querySelectorAll("[data-if]").forEach(b => b.onclick = () => { IF = b.dataset.if; IK = ""; try { localStorage.setItem("inboxF", IF); } catch (e) {} inbox(); });
   V.querySelectorAll("[data-ik]").forEach(b => b.onclick = () => { IK = b.dataset.ik; inbox(); });
+  V.querySelectorAll("[data-is]").forEach(b => b.onclick = () => { IS = b.dataset.is; inbox(); });
   V.querySelectorAll("[data-ig]").forEach(b => b.onclick = () => { IG = b.dataset.ig || null; inbox(); if (IG && matchMedia("(max-width:900px)").matches) V.scrollIntoView(); });
   const qi = $("#ibq"); qi.oninput = () => { IQ = qi.value; const at = qi.selectionStart; inbox(); const n2 = $("#ibq"); n2.focus(); n2.setSelectionRange(at, at); };
   V.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("הועתק"); });
