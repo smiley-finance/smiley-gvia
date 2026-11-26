@@ -1913,7 +1913,8 @@ async function replySendDo(id){
   const { data, error } = await SB.functions.invoke("cms-reply-send", { body: { reply_id: id } });
   if (error || (data && data.ok === false)) { toast("לא נשלח: " + ((data && data.error) || (error && error.message) || "שגיאה")); inbox(); return; }
   const now = new Date().toISOString();
-  if (r) { r.replied_at = now; r.replied_by = ($("#who")?.textContent || ""); r.handled_at = r.handled_at || now; r.handled_by = r.handled_by || r.replied_by; }
+  if (r) { r.replied_at = now; r.replied_by = ($("#who")?.textContent || ""); r.handled_at = r.handled_at || now; r.handled_by = r.handled_by || r.replied_by;
+    if (r.phone) REPLIES.forEach(x => { if (x.phone === r.phone && !x.handled_at) { x.handled_at = now; x.handled_by = r.replied_by; } }); }   // one reply clears the whole customer
   toast("✉️ התשובה נשלחה ללקוח, באותה שיחה"); inboxCount(); inbox();
 }
 // same send, from the 📧 מייל drawer: pick ANY ready reply and send it in-thread to the customer's latest incoming email.
@@ -1923,6 +1924,7 @@ async function replySendDrawer(replyId, kind, phone, flow){
   if (error || (data && data.ok === false)) { toast("לא נשלח: " + ((data && data.error) || (error && error.message) || "שגיאה")); openEmail(phone, flow); return; }
   const r = REPLIES.find(x => x.id === replyId), now = new Date().toISOString();
   if (r) { r.replied_at = now; r.replied_by = ($("#who")?.textContent || ""); r.handled_at = r.handled_at || now; r.handled_by = r.handled_by || r.replied_by; }
+  REPLIES.forEach(x => { if (x.phone === phone && !x.handled_at) { x.handled_at = now; x.handled_by = ($("#who")?.textContent || ""); } });   // one reply clears the whole customer
   toast("✉️ התשובה נשלחה ללקוח, באותה שיחה"); inboxCount(); openEmail(phone, flow); load(true);
 }
 // ---------- 📋 activity log (22.11.2026): one time-ordered feed of everything that happens in the dashboard ----------
