@@ -24,7 +24,7 @@
   const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
   const SITE = "try-smiley.com";
   const BRAND = "#4f46e5";                                                            // one color for every email (all stages)
-  const STATUS_AFTER = { 1: "נשלחה הודעה", 2: "נשלחה הודעה", 3: "נשלח מכתב התראה", 4: "סגור" };   // same as the WhatsApp steps
+  const STATUS_AFTER = { 1: "נשלחה הודעה", 2: "נשלחה הודעה", 3: "נשלח מכתב התראה", 4: "תזכורת אחרונה נשלחה" };   // stage 4 keeps the case ACTIVE (final reminder sent); a clicker closes it by hand
   const NAMES = { 1: "פנייה ראשונה", 2: "תזכורת", 3: "מכתב התראה", 4: "תזכורת אחרונה" };
 
   // ---------- text helpers ----------
@@ -1634,7 +1634,7 @@ function board(keep){
   kb.scrollLeft = keep;                                       // stay where you were after a search / status change
 }
 addEventListener("resize", () => VIEW === "all" && board($("#kb")?.scrollLeft || 0));
-const COLC = {"חדש": "#2563eb", "נשלחה הודעה": "#4f46e5", "בתהליך": "#f59e0b", [HOLD]: "#8b5cf6", [DONE]: "#0d9488", "נשלח מכתב התראה": "#dc2626", "סגור": "#9ca3af"};
+const COLC = {"חדש": "#2563eb", "נשלחה הודעה": "#4f46e5", "בתהליך": "#f59e0b", [HOLD]: "#8b5cf6", [DONE]: "#0d9488", "נשלח מכתב התראה": "#dc2626", "תזכורת אחרונה נשלחה": "#ea580c", "סגור": "#9ca3af"};
 const closeCase = () => $("#vCases").classList.remove("open");
 $("#shade").onclick = closeCase;
 document.addEventListener("keydown", e => e.key === "Escape" && $("#vCases").classList.contains("board") && closeCase());
@@ -2134,7 +2134,8 @@ function openCase(phone, keepScroll){
 const CH = { email: "📧 מייל", sms: "💬 SMS" }, MST = { queued: ["בתור", ""], sent: ["נשלח", "warn"], delivered: ["נמסר", "ok"], failed: ["נכשל", "bad"], bounced: ["חזר", "bad"] };
 // ---------- CMS: the email/SMS case panel (a drawer of its own; the WhatsApp panel is not used here) ----------
 // Same customer details as WhatsApp. Each flow (📧 email, 📱 SMS) has its OWN status, stages and history, changed only here.
-const ESTAT = ["נשלחה הודעה", "בתהליך", HOLD, DONE, "נשלח מכתב התראה", "סגור"];
+const ESTAT = ["נשלחה הודעה", "בתהליך", HOLD, DONE, "נשלח מכתב התראה", "תזכורת אחרונה נשלחה", "סגור"];
+const S4_DONE = "תזכורת אחרונה נשלחה";   // stage-4 final reminder sent, case kept active (not auto-closed)
 let EP = null, EF = "email", CEV = [];                              // EF = which flow the open case panel shows
 const FNM = { email: "📧 מייל", sms: "📱 SMS" };
 const flowSt = (c, f) => f === "sms" ? CMS_SEND.smsStatus(c, MSGS) : c.email_status || "חדש";   // a flow's current status

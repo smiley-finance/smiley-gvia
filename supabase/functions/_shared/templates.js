@@ -13,7 +13,7 @@
   const CONSENT_IMG = "https://cdn.shopify.com/s/files/1/0638/7816/8733/files/WhatsApp_Image_2026-10-27_at_01.43.26.jpg?v=1793091924";
   const SITE = "try-smiley.com";
   const BRAND = "#4f46e5";                                                            // one color for every email (all stages)
-  const STATUS_AFTER = { 1: "נשלחה הודעה", 2: "נשלחה הודעה", 3: "נשלח מכתב התראה", 4: "סגור" };   // same as the WhatsApp steps
+  const STATUS_AFTER = { 1: "נשלחה הודעה", 2: "נשלחה הודעה", 3: "נשלח מכתב התראה", 4: "תזכורת אחרונה נשלחה" };   // stage 4 keeps the case ACTIVE (final reminder sent); a clicker closes it by hand
   const NAMES = { 1: "פנייה ראשונה", 2: "תזכורת", 3: "מכתב התראה", 4: "תזכורת אחרונה" };
 
   // ---------- text helpers ----------
