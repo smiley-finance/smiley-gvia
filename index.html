@@ -1910,6 +1910,15 @@ async function replySendDo(id){
   if (r) { r.replied_at = now; r.replied_by = ($("#who")?.textContent || ""); r.handled_at = r.handled_at || now; r.handled_by = r.handled_by || r.replied_by; }
   toast("✉️ התשובה נשלחה ללקוח, באותה שיחה"); inboxCount(); inbox();
 }
+// same send, from the 📧 מייל drawer: pick ANY ready reply and send it in-thread to the customer's latest incoming email.
+// The server builds Yair's locked text for the chosen kind (cms-reply-send with {reply_id, kind}); browser never sends words.
+async function replySendDrawer(replyId, kind, phone, flow){
+  const { data, error } = await SB.functions.invoke("cms-reply-send", { body: { reply_id: replyId, kind } });
+  if (error || (data && data.ok === false)) { toast("לא נשלח: " + ((data && data.error) || (error && error.message) || "שגיאה")); openEmail(phone, flow); return; }
+  const r = REPLIES.find(x => x.id === replyId), now = new Date().toISOString();
+  if (r) { r.replied_at = now; r.replied_by = ($("#who")?.textContent || ""); r.handled_at = r.handled_at || now; r.handled_by = r.handled_by || r.replied_by; }
+  toast("✉️ התשובה נשלחה ללקוח, באותה שיחה"); inboxCount(); openEmail(phone, flow); load(true);
+}
 // ---------- 📋 activity log (22.11.2026): one time-ordered feed of everything that happens in the dashboard ----------
 // Read-only. Pulls together: emails/SMS sent, replies in & out, status/case changes, and settings/switch changes.
 // Nothing here changes any data.
@@ -2183,10 +2192,16 @@ function openEmail(phone, flow){
             : t.next === s ? (s === 1 ? "ממתין לשליחה ידנית" : t.blocked ? "⏱ " + t.blocked : "⏱ אוטומטי · " + t.sendAtText) : s > 1 ? "⏱ אוטומטי" : "עוד לא"}</div></div>
           ${g ? RSB(phone, s, F) : ""}<button class="btn sm" data-es="${s}">${g ? "תצוגה" : "תצוגה ושליחה"}</button></div>`; }).join("")}</div>
       ${isE ? `<h3>תשובות מוכנות למייל</h3>
-      <div class="hint">כשלקוח עונה למייל: לפתוח את ההתכתבות ב-Gmail, להעתיק את התשובה המתאימה ולהדביק בתשובה. אותן תשובות של הוואטסאפ, בנוסח מייל.</div>
+      ${(() => {
+        const tgt = REPLIES.filter(r => r.phone === c.phone && !r.replied_at && r.msg_id && r.from_email).sort((a, b) => b.at.localeCompare(a.at))[0];   // latest incoming email to thread into
+        const hint = tgt ? `יש פנייה נכנסת מהלקוח — אפשר לשלוח תשובה ישירות מכאן, בתוך אותה שיחה במייל (הטקסט נעול לנוסח של יאיר). לא משנה סטטוס או טיימר.`
+          : `אין פנייה נכנסת מהלקוח לשרשר אליה — אפשר להעתיק את התשובה ולהשיב ב-Gmail.`;
+        return `<div class="hint">${hint}</div>
       ${c.email ? `<div class="btns" style="margin:6px 0 10px"><a class="btn sm" href="${GMAIL(c.email)}" target="_blank">📬 פתח את ההתכתבות ב-Gmail</a></div>` : ""}
-      ${emailReplies(c).map(([t, b, img]) => `<details class="msg"><summary>${esc(t)}</summary>${img ? `<img class="shot" src="${img}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${img}">
-        <button class="btn sm" data-img="${img}">העתק תמונה</button>` : ""}<pre>${esc(b)}</pre><button class="btn sm" data-copy="${esc(b)}">📋 העתק תשובה</button></details>`).join("")}` : ""}
+      ${emailReplies(c).map(([t, b, img]) => { const rk = Object.keys(RK).find(k => RK[k][1] && t.startsWith(RK[k][1]));
+        return `<details class="msg"><summary>${esc(t)}</summary>${img ? `<img class="shot" src="${img}" alt="התמונה לצירוף" crossorigin="anonymous" data-zoom="${img}"><button class="btn sm" data-img="${img}">העתק תמונה</button>` : ""}<pre>${esc(b)}</pre>
+        <div class="btns" style="margin:0">${tgt && rk && SW.email ? `<button class="btn sm send" data-dsend="${tgt.id}" data-dkind="${rk}">✉️ שלח תשובה במייל</button>` : ""}<button class="btn sm" data-copy="${esc(b)}">📋 העתק תשובה</button></div></details>`; }).join("")}`;
+      })()}` : ""}
       <h3>${isE ? "מיילים שנשלחו" : "SMS שנשלחו"}</h3>
       <div class="mlog">${mine.map(m => `<div class="m"><b>${CH[m.channel]}</b> שלב ${m.stage} · ${esc(CMS_T.NAMES[m.stage])}
         <span class="mute">${hm(m.at)} · ${esc(m.channel === "sms" ? local(m.to) : m.to)}</span>
@@ -2204,6 +2219,11 @@ function openEmail(phone, flow){
   $("#epb").querySelectorAll("[data-img]").forEach(b => b.onclick = () => copyImg(b.dataset.img));
   $("#epb").querySelectorAll("[data-fl]").forEach(b => b.onclick = () => openEmail(phone, b.dataset.fl));
   $("#epb").querySelectorAll("[data-es]").forEach(b => b.onclick = () => openSend(phone, Number(b.dataset.es), undefined, F));
+  $("#epb").querySelectorAll("[data-dsend]").forEach(b => b.onclick = () => {                 // send a ready reply from the drawer, in-thread; two clicks
+    if (!b.classList.contains("sure")) { b.dataset.t = b.textContent; b.classList.add("sure"); b.textContent = "⚠️ ללחוץ שוב לשליחה ללקוח";
+      return setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = b.dataset.t; } }, 4000); }
+    b.disabled = true; b.textContent = "שולח…"; replySendDrawer(Number(b.dataset.dsend), b.dataset.dkind, phone, F);
+  });
   $("#epb").querySelectorAll("[data-resend]").forEach(b => b.onclick = () => { const [p, s, ch] = b.dataset.resend.split("|"); openSend(p, Number(s), ch, ch); });
   $("#epb").querySelectorAll("[data-est]").forEach(b => b.onclick = async () => {
     const to = b.dataset.est;
