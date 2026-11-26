@@ -65,8 +65,10 @@ Deno.serve(async (req) => {
   const c = await loadCase(sb, reply.phone);
   if (!c) return json(req, { ok: false, error: "התיק לא נמצא" });
 
-  // the text is built here, from the DB — the browser cannot choose the words
-  const built = REPLIES.build(c, reply.kind);
+  // the text is built here, from the DB — the browser can pick WHICH locked reply (by kind), never the words.
+  // A kind override lets a clicker send any of Yair's ready replies from the email drawer (not only the reply's auto-tag).
+  const sendKind = (typeof body.kind === "string" && body.kind.trim()) ? body.kind.trim() : reply.kind;
+  const built = REPLIES.build(c, sendKind);
   if (!built) return json(req, { ok: false, error: "אין תשובה מוכנה לסוג הזה — יש לענות ב-Gmail" });
 
   // same guards as every send: the email switch and the main kill-switch, and the test allowlist if on
@@ -93,7 +95,7 @@ Deno.serve(async (req) => {
       text: built.body, html: toHtml(built.body, !!built.image), attachments,
     });
     await sb.from("cms_replies").update({ reply_msg_id: msgId, handled_at: reply.handled_at || now, handled_by: reply.handled_by || by }).eq("id", id);
-    await sb.from("cms_runs").insert({ kind: "reply", sent: 1, note: `✉️ תשובה (${reply.kind}) נשלחה ללקוח · ${by}` });
+    await sb.from("cms_runs").insert({ kind: "reply", sent: 1, note: `✉️ תשובה (${sendKind}) נשלחה ללקוח · ${by}` });
     return json(req, { ok: true, reply_msg_id: msgId });
   } catch (e) {
     // the send failed -> release the claim so the reply can be tried again (don't leave it falsely "replied")
