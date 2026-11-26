@@ -95,6 +95,8 @@ Deno.serve(async (req) => {
       text: built.body, html: toHtml(built.body, !!built.image), attachments,
     });
     await sb.from("cms_replies").update({ reply_msg_id: msgId, handled_at: reply.handled_at || now, handled_by: reply.handled_by || by }).eq("id", id);
+    // one reply answers the whole customer: clear all their OTHER still-open replies too (no need to tick each by hand)
+    if (reply.phone) await sb.from("cms_replies").update({ handled_at: now, handled_by: by }).eq("phone", reply.phone).is("handled_at", null);
     await sb.from("cms_runs").insert({ kind: "reply", sent: 1, note: `✉️ תשובה (${sendKind}) נשלחה ללקוח · ${by}` });
     return json(req, { ok: true, reply_msg_id: msgId });
   } catch (e) {
